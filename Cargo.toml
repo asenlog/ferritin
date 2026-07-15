@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/app",
+    "crates/cloud",
+    "crates/dicom",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"

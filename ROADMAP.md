@@ -1,74 +1,45 @@
 # Roadmap
 
-A standalone learning project — fully decoupled from Synapsis's production
-Orthanc deployment. Never point this at real patient data from the
-diagnostic centers; use only synthetic fixtures or anonymized test files.
+A production-grade DICOM/HL7 server built on `dicom-rs` rather than
+hand-rolled, since it is designed to eventually handle real clinical
+traffic.
 
-## M1 — DICOM tag dumper (done, this scaffold)
-- [x] Hand-rolled byte reader over `&[u8]`
-- [x] Explicit VR LE parsing (file meta group), incl. long-form vs
-      short-form length encoding
-- [x] Implicit VR LE parsing (dataset), incl. minimal tag→VR dictionary
-- [x] `dcm-dump` CLI
-- [x] Synthetic fixture generator + end-to-end test
+Development and testing use synthetic fixtures only until the hardening
+phase (P4) — never point this at real patient data before then.
 
-**Try it on a real file next:** point `dcm-dump` at an actual exported
-study (e.g. investigate the Series 9000 Sentinel OT object — check what
-SOP Class UID, Modality, Presentation Intent Type, and Photometric
-Interpretation it actually prints vs. what you expect).
+# Production track — `ferritin`
 
-## M2 — Sequences & undefined-length elements
-Right now the parser deliberately stops when it hits an undefined-length
-element (`0xFFFFFFFF`) — that covers Sequences (SQ) and encapsulated
-(compressed) Pixel Data, both of which use Item (FFFE,E000) /
-Sequence Delimiter (FFFE,E0DD) framing instead of a plain length prefix.
-This is required before you can fully parse presentation state objects
-(which are sequence-heavy) or anything JPEG-compressed.
-- [ ] Parse Item headers within a Sequence
-- [ ] Handle nested/recursive datasets within Sequence Items
-- [ ] Handle encapsulated Pixel Data fragments (Basic Offset Table + frames)
+Decomposed into ordered sub-projects.
 
-## M3 — Validator layer
-Turn the dumper into a pre-ingestion gate:
-- [ ] Flag Photometric Interpretation / ImageType mismatches (the
-      DERIVED/SECONDARY pattern seen on the Sakarellos Hologic unit)
-- [ ] Flag missing StudyInstanceUID / SeriesInstanceUID before it becomes
-      a routing failure downstream
-- [ ] Structured validation report (not just a dump)
+## P1 — DICOM core round-trip pipeline
 
-## M4 — DICOM upper layer protocol (PS3.8)
-The actual networking milestone. Build the association state machine by
-hand — this is where "learning protocols" really lives:
-- [ ] TCP listener, PDU framing (A-ASSOCIATE-RQ, -AC, -RJ; P-DATA-TF)
-- [ ] Presentation context negotiation (propose/accept transfer syntaxes)
-- [ ] C-ECHO SCP (the "hello world" of DICOM networking — verify with a
-      real `echoscu` from DCMTK or `pynetdicom`)
-- [ ] C-STORE SCP (receive and persist a file)
+SCP intake (AET + source-IP authorized modalities) → Modality/SOP-Class
+filter → per-study de-identification (SQLite mapping) → object-store
+upload → result-queue listener → fetch → re-identification → SCU
+forward-back to the resolved per-source destination AE. Persistent,
+auto-retrying job queues for both the outbound (upload) and inbound
+(forward-back) legs.
 
-Reference: DICOM PS3.7 (message exchange), PS3.8 (network communication
-support), PS3.4 Annex B (C-STORE service class).
+- [x] Three-crate scaffold: `dicom` (product + `ObjectStore`/`ResultQueue`
+      ports), `cloud` (S3/SQS adapters), `app` (binary wiring)
+- [x] `config`: env-based config loading, `.env` support (app)
+- [ ] `scp`: association accept + AET/IP authorization (dicom)
+- [x] `filter`: Modality/SOP-Class allowlist + vendor blocklist (dicom)
+- [ ] `anonymize` + `db`: per-study mapping, Replace/Keep tag transform (dicom)
+- [ ] `s3`: content-hash + upload with deterministic key convention (cloud)
+- [ ] `sqs`: results-queue listener (S3-event message format) (cloud)
+- [ ] `deanonymize` + `scu`: re-identify, resolve destination, forward (dicom)
+- [ ] Outbound/inbound persistent retry-queue workers
+- [ ] Interop test against DCMTK `storescu`/`storescp`, synthetic
+      fixtures only
 
-## M5 — SCU roles
-- [ ] C-STORE SCU (push a synthetic study to a test SCP — this is the
-      "fake modality" half of the site-integration simulator)
-- [ ] C-FIND SCP (basic worklist query support)
+## P2 — Worklist / C-FIND SCP
+Scheduled-procedure queries so modalities can pull worklists directly
+from `ferritin`. Spec TBD.
 
-## M6 — HL7 v2 over MLLP
-- [ ] MLLP framing (VT/FS/CR) — `hl7-mllp` crate or hand-rolled
-- [ ] Parse ADT^A01/A08 and ORM^O01 (`hl7-parser` crate as a starting
-      point; consider hand-rolling the pipe-and-hat tokenizer for the
-      learning value, same as the DICOM parser)
-- [ ] ACK/NACK generation
+## P3 — HL7 v2 / MLLP ingestion
+ADT/ORM intake, patient correlation. Spec TBD.
 
-## M7 — Correlation (the actual point of the simulator)
-- [ ] Fire a consistent patient ID across both an HL7 ADT message and a
-      C-STORE'd DICOM study, so a new site's matching/worklist logic can
-      be regression-tested against known-good and known-bad scenarios
-      before going live against production Orthanc.
-
-## M8 — Stretch: fuzzing
-- [ ] `cargo-fuzz` target against the M1/M2 parser with malformed and
-      adversarial DICOM files. Genuinely relevant to the Application
-      Cybersecurity Plan (FPS05-00-01) — "no memory corruption is
-      possible" is a provable property in Rust in a way it isn't in a
-      C/C++ parser.
+## P4 — Production hardening
+Shadow-mode validation against real traffic volumes, monitoring,
+rollback plan — before any live deployment. Spec TBD.
