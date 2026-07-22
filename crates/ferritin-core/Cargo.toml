@@ -1,5 +1,5 @@
 [package]
-name = "dicom"
+name = "ferritin-core"
 edition.workspace = true
 version.workspace = true
 

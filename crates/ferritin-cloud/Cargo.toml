@@ -1,10 +1,10 @@
 [package]
-name = "cloud"
+name = "ferritin-cloud"
 edition.workspace = true
 version.workspace = true
 
 [dependencies]
-dicom = { path = "../dicom" }
+ferritin-core = { path = "../ferritin-core" }
 aws-config = "1"
 aws-sdk-s3 = "1"
 aws-sdk-sqs = "1"

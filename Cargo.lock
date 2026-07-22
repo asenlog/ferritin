@@ -39,23 +39,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
-name = "app"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cloud",
- "dicom",
- "dotenvy",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "arc-swap"
 version = "1.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -744,19 +727,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cloud"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aws-config",
- "aws-sdk-s3",
- "aws-sdk-sqs",
- "dicom",
- "serde_json",
- "tracing",
-]
-
-[[package]]
 name = "cmake"
 version = "0.1.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -950,27 +920,6 @@ name = "deranged"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
-
-[[package]]
-name = "dicom"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "dicom-core",
- "dicom-dictionary-std",
- "dicom-object",
- "dicom-transfer-syntax-registry",
- "dicom-ul",
- "serde",
- "sha2 0.10.9",
- "sqlx",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
- "uuid",
-]
 
 [[package]]
 name = "dicom-core"
@@ -1269,6 +1218,57 @@ name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
+
+[[package]]
+name = "ferritin"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dotenvy",
+ "ferritin-cloud",
+ "ferritin-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "ferritin-cloud"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-config",
+ "aws-sdk-s3",
+ "aws-sdk-sqs",
+ "ferritin-core",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "ferritin-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dicom-core",
+ "dicom-dictionary-std",
+ "dicom-object",
+ "dicom-transfer-syntax-registry",
+ "dicom-ul",
+ "serde",
+ "sha2 0.10.9",
+ "sqlx",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "ff"

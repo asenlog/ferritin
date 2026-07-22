@@ -27,12 +27,12 @@ Never point this at real patient data.
 
 ```
 ferritin/
-├── Cargo.toml     workspace root
+├── Cargo.toml     the `ferritin` binary package + workspace root
+├── src/           the binary — config loading + wiring
 ├── ROADMAP.md
-├── crates/
-│   ├── app/       the binary — config loading + wiring
-│   ├── dicom/     core library — filter, models, db, anonymize, scp/scu
-│   └── cloud/     AWS adapters — S3 object store, SQS results queue
+├── crates/        libraries only
+│   ├── ferritin-core/    domain library — filter, models, db, anonymize, scp/scu
+│   └── ferritin-cloud/   AWS adapters — S3 object store, SQS results queue
 └── fixtures/      test DICOM files (not yet added)
 ```
 
@@ -41,7 +41,7 @@ ferritin/
 Config comes from the environment: a `.env` file at the repo root for
 local runs (found by walking up from the working directory; real
 environment variables always win), or plain env vars in production
-(e.g. systemd `EnvironmentFile=`). See `crates/app/src/config.rs` for
+(e.g. systemd `EnvironmentFile=`). See `src/config.rs` for
 the full list of required keys.
 
 ## Useful references

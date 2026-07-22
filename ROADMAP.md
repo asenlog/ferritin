@@ -20,15 +20,16 @@ forward-back to the resolved per-source destination AE. Persistent,
 auto-retrying job queues for both the outbound (upload) and inbound
 (forward-back) legs.
 
-- [x] Three-crate scaffold: `dicom` (product + `ObjectStore`/`ResultQueue`
-      ports), `cloud` (S3/SQS adapters), `app` (binary wiring)
-- [x] `config`: env-based config loading, `.env` support (app)
-- [ ] `scp`: association accept + AET/IP authorization (dicom)
-- [x] `filter`: Modality/SOP-Class allowlist + vendor blocklist (dicom)
-- [ ] `anonymize` + `db`: per-study mapping, Replace/Keep tag transform (dicom)
-- [ ] `s3`: content-hash + upload with deterministic key convention (cloud)
-- [ ] `sqs`: results-queue listener (S3-event message format) (cloud)
-- [ ] `deanonymize` + `scu`: re-identify, resolve destination, forward (dicom)
+- [x] Workspace scaffold: root package `ferritin` (binary wiring) plus the
+      `crates/` libraries — `ferritin-core` (product +
+      `ObjectStore`/`ResultQueue` ports), `ferritin-cloud` (S3/SQS adapters)
+- [x] `config`: env-based config loading, `.env` support (ferritin)
+- [ ] `scp`: association accept + AET/IP authorization (ferritin-core)
+- [x] `filter`: Modality/SOP-Class allowlist + vendor blocklist (ferritin-core)
+- [ ] `anonymize` + `db`: per-study mapping, Replace/Keep tag transform (ferritin-core)
+- [ ] `s3`: content-hash + upload with deterministic key convention (ferritin-cloud)
+- [ ] `sqs`: results-queue listener (S3-event message format) (ferritin-cloud)
+- [ ] `deanonymize` + `scu`: re-identify, resolve destination, forward (ferritin-core)
 - [ ] Outbound/inbound persistent retry-queue workers
 - [ ] Interop test against DCMTK `storescu`/`storescp`, synthetic
       fixtures only

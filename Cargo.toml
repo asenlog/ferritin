@@ -1,11 +1,30 @@
+[package]
+name = "ferritin"
+edition.workspace = true
+version.workspace = true
+
 [workspace]
 resolver = "2"
 members = [
-    "crates/app",
-    "crates/cloud",
-    "crates/dicom",
+    "crates/ferritin-cloud",
+    "crates/ferritin-core",
 ]
 
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
+
+[dependencies]
+ferritin-cloud = { path = "crates/ferritin-cloud" }
+ferritin-core = { path = "crates/ferritin-core" }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+serde_json = "1"
+dotenvy = "0.15.7"
+
+[dev-dependencies]
+tempfile = "3"

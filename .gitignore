@@ -1,4 +1,6 @@
 /target
 .DS_Store
 .env
+.idea
+.vscode
 /docs/superpowers
