@@ -53,6 +53,9 @@ pub mod status {
 /// CommandDataSetType value for "no dataset follows" (PS3.7 §9.3).
 const NO_DATASET: u16 = 0x0101;
 
+/// CommandDataSetType value for "a dataset follows" (PS3.7 §9.3).
+const DATASET_FOLLOWS: u16 = 0x0000;
+
 /// Parse a DIMSE command set. Command sets are always encoded
 /// Implicit VR Little Endian (PS3.7 §9.2), regardless of the transfer
 /// syntax negotiated for datasets.
@@ -159,9 +162,58 @@ pub fn store_response(
     ])
 }
 
+/// Build a C-STORE-RQ command set (PS3.7 §9.1.1.1.1) — the outbound
+/// side, used by the SCU when forwarding results.
+pub fn store_request(
+    message_id: u16,
+    sop_class_uid: &str,
+    sop_instance_uid: &str,
+) -> InMemDicomObject {
+    InMemDicomObject::command_from_element_iter([
+        DataElement::new(
+            tags::AFFECTED_SOP_CLASS_UID,
+            VR::UI,
+            dicom_value!(Str, sop_class_uid),
+        ),
+        DataElement::new(
+            tags::COMMAND_FIELD,
+            VR::US,
+            dicom_value!(U16, [command::C_STORE_RQ]),
+        ),
+        DataElement::new(tags::MESSAGE_ID, VR::US, dicom_value!(U16, [message_id])),
+        DataElement::new(
+            tags::COMMAND_DATA_SET_TYPE,
+            VR::US,
+            dicom_value!(U16, [DATASET_FOLLOWS]),
+        ),
+        DataElement::new(
+            tags::AFFECTED_SOP_INSTANCE_UID,
+            VR::UI,
+            dicom_value!(Str, sop_instance_uid),
+        ),
+    ])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn store_request_carries_uids_and_marks_dataset() {
+        let rq = store_request(3, uids::CT_IMAGE_STORAGE, "1.2.3.4.5");
+
+        assert_eq!(command_field(&rq).unwrap(), command::C_STORE_RQ);
+        assert_eq!(message_id(&rq).unwrap(), 3);
+        assert_eq!(affected_sop_class_uid(&rq).unwrap(), uids::CT_IMAGE_STORAGE);
+        assert_eq!(affected_sop_instance_uid(&rq).unwrap(), "1.2.3.4.5");
+        assert_eq!(
+            rq.element(tags::COMMAND_DATA_SET_TYPE)
+                .unwrap()
+                .to_int::<u16>()
+                .unwrap(),
+            DATASET_FOLLOWS
+        );
+    }
 
     #[test]
     fn echo_response_carries_request_message_id_and_success() {

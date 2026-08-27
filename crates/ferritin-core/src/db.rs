@@ -37,6 +37,11 @@ pub trait MappingStore {
         patient_id: &str,
         patient_name: &str,
     ) -> anyhow::Result<StudyMapping>;
+
+    /// Look up the mapping for a study without creating one — the
+    /// re-identification leg must not fabricate mappings for studies
+    /// it has never seen.
+    fn find(&self, study_instance_uid: &str) -> anyhow::Result<Option<StudyMapping>>;
 }
 
 /// Pseudonyms are a deterministic function of the study UID: any
@@ -47,6 +52,22 @@ fn pseudonyms(study_instance_uid: &str) -> (String, String) {
     let id = format!("ANON-{}", &hex[..12]);
     let name = format!("ANON^{}", &hex[..8].to_uppercase());
     (id, name)
+}
+
+const MAPPING_SELECT: &str = "SELECT study_instance_uid, patient_id, patient_name,
+        anon_patient_id, anon_patient_name, created_at
+     FROM study_mappings WHERE study_instance_uid = $1";
+
+fn mapping_from_row(row: &sqlx::postgres::PgRow) -> anyhow::Result<StudyMapping> {
+    use sqlx::Row;
+    Ok(StudyMapping {
+        study_instance_uid: row.try_get("study_instance_uid")?,
+        patient_id: row.try_get("patient_id")?,
+        patient_name: row.try_get("patient_name")?,
+        anon_patient_id: row.try_get("anon_patient_id")?,
+        anon_patient_name: row.try_get("anon_patient_name")?,
+        created_at: row.try_get("created_at")?,
+    })
 }
 
 /// Postgres adapter for both database-backed ports. Owns a private
@@ -94,8 +115,6 @@ impl MappingStore for PgStore {
         patient_id: &str,
         patient_name: &str,
     ) -> anyhow::Result<StudyMapping> {
-        use sqlx::Row;
-
         let (anon_id, anon_name) = pseudonyms(study_instance_uid);
         self.runtime.block_on(async {
             // lose the race harmlessly: first writer wins, then read back
@@ -114,24 +133,23 @@ impl MappingStore for PgStore {
             .await
             .context("failed to insert study mapping")?;
 
-            let row = sqlx::query(
-                "SELECT study_instance_uid, patient_id, patient_name,
-                        anon_patient_id, anon_patient_name, created_at
-                 FROM study_mappings WHERE study_instance_uid = $1",
-            )
-            .bind(study_instance_uid)
-            .fetch_one(&self.pool)
-            .await
-            .context("failed to read back study mapping")?;
+            let row = sqlx::query(MAPPING_SELECT)
+                .bind(study_instance_uid)
+                .fetch_one(&self.pool)
+                .await
+                .context("failed to read back study mapping")?;
+            mapping_from_row(&row)
+        })
+    }
 
-            Ok(StudyMapping {
-                study_instance_uid: row.try_get("study_instance_uid")?,
-                patient_id: row.try_get("patient_id")?,
-                patient_name: row.try_get("patient_name")?,
-                anon_patient_id: row.try_get("anon_patient_id")?,
-                anon_patient_name: row.try_get("anon_patient_name")?,
-                created_at: row.try_get("created_at")?,
-            })
+    fn find(&self, study_instance_uid: &str) -> anyhow::Result<Option<StudyMapping>> {
+        self.runtime.block_on(async {
+            let row = sqlx::query(MAPPING_SELECT)
+                .bind(study_instance_uid)
+                .fetch_optional(&self.pool)
+                .await
+                .context("failed to look up study mapping")?;
+            row.as_ref().map(mapping_from_row).transpose()
         })
     }
 }
@@ -168,9 +186,11 @@ impl CallerDirectory for PgStore {
 }
 
 /// Test adapter: same get-or-create semantics, no database.
-#[derive(Default)]
+/// Clone-cheap (shared interior) so tests can hand one instance to
+/// both the intake and the forwarding side.
+#[derive(Clone, Default)]
 pub struct InMemoryMappingStore {
-    inner: Mutex<HashMap<String, StudyMapping>>,
+    inner: Arc<Mutex<HashMap<String, StudyMapping>>>,
 }
 
 impl MappingStore for InMemoryMappingStore {
@@ -195,6 +215,11 @@ impl MappingStore for InMemoryMappingStore {
                 }
             })
             .clone())
+    }
+
+    fn find(&self, study_instance_uid: &str) -> anyhow::Result<Option<StudyMapping>> {
+        let guard = self.inner.lock().expect("mapping store poisoned");
+        Ok(guard.get(study_instance_uid).cloned())
     }
 }
 
@@ -222,5 +247,15 @@ mod tests {
         let b = store.mapping_for("9.9.9", "PAT-1", "Doe^John").unwrap();
 
         assert_ne!(a.anon_patient_id, b.anon_patient_id);
+    }
+
+    #[test]
+    fn find_returns_none_for_unknown_study() {
+        let store = InMemoryMappingStore::default();
+
+        assert!(store.find("1.2.3").unwrap().is_none());
+
+        let created = store.mapping_for("1.2.3", "PAT-1", "Doe^John").unwrap();
+        assert_eq!(store.find("1.2.3").unwrap(), Some(created));
     }
 }

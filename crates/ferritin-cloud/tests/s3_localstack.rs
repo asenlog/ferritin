@@ -3,7 +3,7 @@
 //! the core Postgres tests.
 
 use aws_config::BehaviorVersion;
-use ferritin_cloud::s3::S3ObjectStore;
+use ferritin_cloud::aws::s3::S3ObjectStore;
 use ferritin_core::store::ObjectStore;
 use std::sync::Arc;
 use testcontainers::runners::SyncRunner;

@@ -4,7 +4,7 @@
 //! on success; failures stay on the queue.
 
 use aws_config::BehaviorVersion;
-use ferritin_cloud::sqs::{FetchedResult, SqsResultListener};
+use ferritin_cloud::aws::sqs::{FetchedResult, SqsResultListener};
 use std::sync::{Arc, Mutex};
 use testcontainers::runners::SyncRunner;
 use testcontainers_modules::localstack::LocalStack;

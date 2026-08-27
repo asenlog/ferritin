@@ -1,5 +1,5 @@
-//! Per-study de-identification: a Replace/Keep tag transform driven
-//! by the study's `StudyMapping`.
+//! Per-study de-identification and its inverse: a Replace/Keep tag
+//! transform driven by the study's `StudyMapping`.
 //!
 //! Tags in the replace set take the study pseudonym; tags in the
 //! empty set are blanked; everything else is kept untouched. UIDs are
@@ -44,6 +44,26 @@ pub fn anonymize(obj: &mut InMemDicomObject, mapping: &StudyMapping) {
             let vr = elem.vr();
             obj.put(DataElement::new(tag, vr, dicom_value!(Str, "")));
         }
+    }
+}
+
+/// The inverse of `anonymize`: put the study's original patient
+/// identity back. Only the pseudonym-replaced tags are restored —
+/// blanked tags were never stored anywhere and stay blank. The
+/// identity elements are written unconditionally: a result that
+/// dropped them still gets re-identified.
+pub fn deanonymize(obj: &mut InMemDicomObject, mapping: &StudyMapping) {
+    for (tag, vr, value) in [
+        (
+            tags::PATIENT_NAME,
+            dicom_core::VR::PN,
+            mapping.patient_name.as_str(),
+        ),
+        (tags::PATIENT_ID, dicom_core::VR::LO, mapping.patient_id.as_str()),
+    ] {
+        // keep the element's VR if it exists, else the dictionary one
+        let vr = obj.element(tag).map(|elem| elem.vr()).unwrap_or(vr);
+        obj.put(DataElement::new(tag, vr, dicom_value!(Str, value)));
     }
 }
 
@@ -122,5 +142,31 @@ mod tests {
 
         assert!(obj.element(tags::PATIENT_NAME).is_err());
         assert!(obj.element(tags::PATIENT_BIRTH_DATE).is_err());
+    }
+
+    #[test]
+    fn deanonymize_restores_original_identity() {
+        let mut obj = identified_obj();
+        anonymize(&mut obj, &mapping());
+        deanonymize(&mut obj, &mapping());
+
+        assert_eq!(text_of(&obj, tags::PATIENT_NAME), "Doe^John");
+        assert_eq!(text_of(&obj, tags::PATIENT_ID), "PAT-1");
+        // blanked tags were never stored — they stay blank
+        assert_eq!(text_of(&obj, tags::PATIENT_BIRTH_DATE), "");
+    }
+
+    #[test]
+    fn deanonymize_writes_identity_even_when_absent() {
+        let mut obj = InMemDicomObject::from_element_iter([DataElement::new(
+            tags::MODALITY,
+            VR::CS,
+            dicom_value!(Str, "CT"),
+        )]);
+        deanonymize(&mut obj, &mapping());
+
+        assert_eq!(text_of(&obj, tags::PATIENT_NAME), "Doe^John");
+        assert_eq!(obj.element(tags::PATIENT_NAME).unwrap().vr(), VR::PN);
+        assert_eq!(text_of(&obj, tags::PATIENT_ID), "PAT-1");
     }
 }

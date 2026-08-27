@@ -68,30 +68,7 @@ fn dataset_bytes(ts_uid: &str) -> Vec<u8> {
 }
 
 fn store_request(message_id: u16) -> InMemDicomObject {
-    InMemDicomObject::command_from_element_iter([
-        DataElement::new(
-            tags::AFFECTED_SOP_CLASS_UID,
-            VR::UI,
-            dicom_value!(Str, CT_IMAGE_STORAGE),
-        ),
-        DataElement::new(
-            tags::COMMAND_FIELD,
-            VR::US,
-            dicom_value!(U16, [dimse::command::C_STORE_RQ]),
-        ),
-        DataElement::new(tags::MESSAGE_ID, VR::US, dicom_value!(U16, [message_id])),
-        // any value other than 0x0101 means "a dataset follows"
-        DataElement::new(
-            tags::COMMAND_DATA_SET_TYPE,
-            VR::US,
-            dicom_value!(U16, [0x0000]),
-        ),
-        DataElement::new(
-            tags::AFFECTED_SOP_INSTANCE_UID,
-            VR::UI,
-            dicom_value!(Str, SOP_INSTANCE_UID),
-        ),
-    ])
+    dimse::store_request(message_id, CT_IMAGE_STORAGE, SOP_INSTANCE_UID)
 }
 
 #[test]

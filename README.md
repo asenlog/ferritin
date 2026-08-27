@@ -33,7 +33,8 @@ ferritin/
 ├── ROADMAP.md
 ├── crates/        libraries only
 │   ├── ferritin-core/    domain library — auth, dimse, intake, anonymize, db, scp
-│   └── ferritin-cloud/   AWS adapters — S3 object store, SQS results queue
+│   └── ferritin-cloud/   adapters to external systems, one module each —
+│                         aws::s3 (object store), aws::sqs (results listener)
 └── fixtures/      test DICOM files (not yet added)
 ```
 
