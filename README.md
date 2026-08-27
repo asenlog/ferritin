@@ -28,14 +28,17 @@ Never point this at real patient data.
 
 ```
 ferritin/
-├── Cargo.toml     the `ferritin` binary package + workspace root
-├── src/           the binary — config loading + wiring
-├── ROADMAP.md
-├── crates/        libraries only
-│   ├── ferritin-core/    domain library — auth, dimse, intake, anonymize, db, scp
-│   └── ferritin-cloud/   adapters to external systems, one module each —
-│                         aws::s3 (object store), aws::sqs (results listener)
-└── fixtures/      test DICOM files (not yet added)
+├── Cargo.toml      the `ferritin` package (lib + bin)
+├── src/
+│   ├── lib.rs      app + infra
+│   ├── main.rs     the binary — env config loading + wiring
+│   ├── app/        the application core:
+│   │               models/, ports.rs, service/, dicom/
+│   └── infra/      every adapter, named for what it is:
+│                   scp, scu, store, db/ (Postgres), cloud/ (aws)
+├── tests/          integration tests + fixtures
+├── migrations/     reversible sqlx migrations (up/down pairs)
+└── ROADMAP.md
 ```
 
 ## Configuration

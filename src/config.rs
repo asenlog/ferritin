@@ -1,7 +1,14 @@
 use dotenvy::dotenv;
 use std::path::PathBuf;
 
-pub use ferritin_core::config::DICOMServerConfig;
+/// This node's own DICOM identity (deployment config, from env).
+#[derive(Debug, Clone)]
+pub struct DICOMServerConfig {
+    pub facility_name: String,
+    pub host: String,
+    pub port: u16,
+    pub ae_title: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct Config {

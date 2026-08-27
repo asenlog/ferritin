@@ -5,26 +5,36 @@ version.workspace = true
 
 [workspace]
 resolver = "2"
-members = [
-    "crates/ferritin-cloud",
-    "crates/ferritin-core",
-]
 
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
 
 [dependencies]
-ferritin-cloud = { path = "crates/ferritin-cloud" }
-ferritin-core = { path = "crates/ferritin-core" }
-tokio = { version = "1", features = ["full"] }
+dicom-core = "0.10"
+dicom-object = "0.10"
+dicom-ul = "0.10"
+dicom-dictionary-std = "0.10"
+dicom-transfer-syntax-registry = "0.10"
+sqlx = { version = "0.9", features = ["postgres", "runtime-tokio", "chrono", "migrate"] }
+aws-config = "1"
+aws-sdk-s3 = "1"
+aws-sdk-sqs = "1"
+ipnet = "2"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 thiserror = "2"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = "0.3"
-serde_json = "1"
 dotenvy = "0.15.7"
+tokio = { version = "1", features = ["full"] }
+sha2 = "0.10"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
 
 [dev-dependencies]
 tempfile = "3"
+testcontainers = { version = "0.27", features = ["blocking"] }
+testcontainers-modules = { version = "0.15", features = ["postgres", "localstack"] }
+uuid = { version = "1", features = ["v4"] }

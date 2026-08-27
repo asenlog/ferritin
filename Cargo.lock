@@ -1505,50 +1505,20 @@ name = "ferritin"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "dotenvy",
- "ferritin-cloud",
- "ferritin-core",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "ferritin-cloud"
-version = "0.1.0"
-dependencies = [
- "anyhow",
  "aws-config",
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "base64 0.22.1",
- "ferritin-core",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "testcontainers",
- "testcontainers-modules",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "ferritin-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
  "chrono",
  "dicom-core",
  "dicom-dictionary-std",
  "dicom-object",
  "dicom-transfer-syntax-registry",
  "dicom-ul",
+ "dotenvy",
  "ipnet",
  "serde",
+ "serde_json",
  "sha2 0.10.9",
  "sqlx",
  "tempfile",
@@ -1557,6 +1527,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 

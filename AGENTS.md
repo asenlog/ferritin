@@ -15,30 +15,35 @@
 
 ## Layout
 
-- `src/` — the binary: env config loading + wiring (composition root)
-- `crates/ferritin-core/src/models/` — domain models, one module per
-  aggregate (`auth`, `rules`, `mappings`, `modality`); nothing here
-  knows SQL or sockets exist. **Types only — no traits, no impls**
-- `crates/ferritin-core/src/ports.rs` — every port trait, in one
-  module (synapse's `app/ports` analog); signatures over domain
-  model types, no bodies
-- `crates/ferritin-core/src/service/` — orchestrators (`intake`,
-  `forward`) composing domain ports only; no concrete infrastructure
-  types. Services here are always DI structs; pure DICOM logic lives
-  in `dicom/`, not here
-- `crates/ferritin-core/src/dicom/` — pure DICOM logic, functions
-  only (`dimse` command sets, `anonymize` tag transforms); no
-  sockets, no ports
-- `crates/ferritin-core/src/db/` — database layer, one repository
-  module per table/aggregate implementing its port for `PgStore`;
-  a new table gets its own module. Row models and row ↔ domain
-  conversions live here, never in `models/`
-- `crates/ferritin-core/tests/fixtures/` — static port adapters for
-  integration tests (Null Objects over `Vec`); no logic, ever
-- `crates/ferritin-core/src/{scp,scu,store}.rs` — edge
-  adapters: DICOM network I/O and the filesystem object store
-- `crates/ferritin-cloud/` — adapters to external systems, one module
-  per system (`aws::s3`, `aws::sqs`)
+One package (`src/lib.rs` is the app, `src/main.rs` the wiring) —
+hexagonal boundaries are expressed as **modules**, not crates. The
+binary is the only consumer; crate-splitting bought nothing here and
+cost dependency cycles. The rules below are enforced by discipline
+and review, not the compiler — keep them.
+
+- `src/main.rs` + `src/config.rs` — the binary: env config loading +
+  wiring (composition root)
+- `src/app/` — the application core (synapse's `internal/app`
+  analog); nothing here touches SQL, sockets, files, or cloud SDKs:
+  - `app/models/` — domain models, one module per aggregate (`auth`,
+    `rules`, `mappings`, `modality`). **Types only — no traits, no
+    impls**
+  - `app/ports.rs` — every port trait, in one module; signatures over
+    domain model types, no bodies
+  - `app/service/` — orchestrators (`intake`, `forward`) composing
+    ports only; always DI structs
+  - `app/dicom/` — pure DICOM logic, functions only (`dimse` command
+    sets, `anonymize` tag transforms); no sockets, no ports
+- `src/infra/` — every adapter that touches the outside world, named
+  for what it is: `scp` (DICOM server, drives intake), `scu` (DICOM
+  client), `store` (filesystem object store), `db/` (Postgres
+  repositories, one module per table; row models and row ↔ domain
+  conversions live here, never in `app/models/`), `cloud/` (external
+  systems, one module per system — `aws::s3`, `aws::sqs`). Driving
+  vs driven is documented in `infra/mod.rs`; nothing in `app`
+  imports from `infra`
+- `tests/fixtures/` — static port adapters for integration tests
+  (Null Objects over `Vec`); no logic, ever
 - `migrations/` — sqlx migrations at the workspace root, embedded at
   compile time, run at startup under an advisory lock. **Every
   migration is a reversible pair** (`<version>_<desc>.up.sql` +
@@ -48,7 +53,7 @@
   these stay out of the row models
 
 Dependency direction is one-way: `service` → `ports` → `models` ←
-`db` / edge adapters / `ferritin-cloud`.
+`infra`.
 
 ## Config boundary
 
@@ -59,9 +64,9 @@ README "Configuration" section.
 
 ## Testing
 
-- `cargo test --workspace` — includes container tests
-  (testcontainers: Postgres, LocalStack), so a running **Docker
-  daemon is required**; they fail rather than skip without it
+- `cargo test` — includes container tests (testcontainers: Postgres,
+  LocalStack), so a running **Docker daemon is required**; they fail
+  rather than skip without it
 - Keep the tree lint-clean: `cargo fmt --all -- --check` and
   `cargo clippy --workspace --all-targets` must both pass before
   pushing

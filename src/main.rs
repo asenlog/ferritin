@@ -1,10 +1,11 @@
-mod config;
-use crate::config::{Config, StorageBackend};
-use ferritin_cloud::aws::s3::S3ObjectStore;
-use ferritin_cloud::aws::sqs::SqsResultListener;
-use ferritin_core::scu::ScuClient;
-use ferritin_core::service::forward::ForwardingService;
-use ferritin_core::{db::PgStore, scp, store::FsObjectStore};
+use ferritin::app::service::forward::ForwardingService;
+use ferritin::config::{Config, StorageBackend};
+use ferritin::infra::cloud::aws::s3::S3ObjectStore;
+use ferritin::infra::cloud::aws::sqs::SqsResultListener;
+use ferritin::infra::db::PgStore;
+use ferritin::infra::scp;
+use ferritin::infra::scu::ScuClient;
+use ferritin::infra::store::FsObjectStore;
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().init();
