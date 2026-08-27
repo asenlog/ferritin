@@ -192,6 +192,7 @@ fn round_trip_restores_identity_at_the_destination() {
         },
         FsObjectStore::new(dir.path()),
         mappings.clone(),
+        fixtures::StaticFilter::allow_all(),
         fixtures::StaticCallers(vec!["TEST-SCU@127.0.0.1".parse().unwrap()]),
     );
     std::thread::spawn(move || {

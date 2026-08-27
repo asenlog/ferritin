@@ -46,6 +46,9 @@ pub mod status {
     pub const SUCCESS: u16 = 0x0000;
     /// Refused: out of resources — e.g. persistence failed.
     pub const REFUSED_OUT_OF_RESOURCES: u16 = 0xA700;
+    /// Refused: dataset does not match SOP Class — e.g. rejected by
+    /// the intake filter policy.
+    pub const REFUSED_DATASET_MISMATCH: u16 = 0xA900;
     /// Error: cannot understand — e.g. the dataset could not be parsed.
     pub const CANNOT_UNDERSTAND: u16 = 0xC000;
 }

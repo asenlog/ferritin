@@ -4,6 +4,7 @@
 //! running Docker daemon — no DATABASE_URL, no local Postgres install.
 
 use ferritin::app::ports::CallerDirectory;
+use ferritin::app::ports::FilterDirectory;
 use ferritin::app::ports::MappingStore;
 use ferritin::app::ports::RuleDirectory;
 use ferritin::infra::db::PgStore;
@@ -184,4 +185,47 @@ fn pg_rule_directory_round_trip() {
     assert_eq!(rule.destination.ae_title, "PACS");
     assert_eq!(rule.destination.host, "192.168.1.10");
     assert_eq!(rule.destination.port, 104);
+}
+
+#[test]
+fn pg_filter_directory_round_trip() {
+    let rig = rig();
+
+    // insert directly, as the frontend (or a migration) would —
+    // one rule per kind plus a soft-deleted one
+    rig.runtime.block_on(async {
+        for (kind, value, deleted) in [
+            ("allow_modality", "MG", false),
+            ("allow_sop_class", "1.2.840.10008.5.1.4.1.1.13.1.3", false),
+            ("block_vendor", "EvilCorp", false),
+            ("block_vendor", "GoneCorp", true),
+            ("nonsense_kind", "whatever", false),
+        ] {
+            let mut query = sqlx::query("INSERT INTO filter_rules (kind, value) VALUES ($1, $2)");
+            if deleted {
+                query = sqlx::query(
+                    "INSERT INTO filter_rules (kind, value, deleted_at) VALUES ($1, $2, now())",
+                );
+            }
+            query
+                .bind(kind)
+                .bind(value)
+                .execute(&rig.pool)
+                .await
+                .unwrap();
+        }
+    });
+
+    let policy = rig.store.filter_policy().unwrap();
+
+    assert_eq!(
+        policy.allow_modalities,
+        vec![ferritin::app::models::modality::ModalityType::MG]
+    );
+    assert_eq!(
+        policy.allow_sop_classes,
+        vec!["1.2.840.10008.5.1.4.1.1.13.1.3".to_string()]
+    );
+    // soft-deleted rows are invisible, unknown kinds ignored
+    assert_eq!(policy.block_vendors, vec!["EvilCorp".to_string()]);
 }

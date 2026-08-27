@@ -82,6 +82,7 @@ fn c_store_round_trip_persists_instance() {
         test_config(),
         FsObjectStore::new(dir.path()),
         InMemoryMappingStore::default(),
+        fixtures::StaticFilter::allow_all(),
         test_callers(),
     );
     // serve until the test process exits; the client disconnects below
@@ -161,6 +162,7 @@ fn unknown_calling_ae_is_rejected() {
         test_config(),
         FsObjectStore::new(dir.path()),
         InMemoryMappingStore::default(),
+        fixtures::StaticFilter::allow_all(),
         test_callers(),
     );
     std::thread::spawn(move || {
@@ -186,6 +188,7 @@ fn wrong_called_ae_is_rejected() {
         test_config(),
         FsObjectStore::new(dir.path()),
         InMemoryMappingStore::default(),
+        fixtures::StaticFilter::allow_all(),
         test_callers(),
     );
     std::thread::spawn(move || {

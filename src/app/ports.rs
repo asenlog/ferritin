@@ -38,6 +38,12 @@ pub trait RuleDirectory {
     fn forwarding_rules(&self) -> anyhow::Result<Vec<crate::app::models::rules::ForwardingRule>>;
 }
 
+/// Where the intake filter policy is kept. Read fresh per instance
+/// so policy edits take effect without a restart.
+pub trait FilterDirectory {
+    fn filter_policy(&self) -> anyhow::Result<crate::app::models::filter::FilterPolicy>;
+}
+
 /// Object persistence and retrieval (the fetch leg: results listener
 /// → fetch → re-identification).
 pub trait ObjectStore {

@@ -19,11 +19,26 @@ fn main() -> anyhow::Result<()> {
     match cfg.storage.backend {
         StorageBackend::Fs => {
             let store = FsObjectStore::new(cfg.storage.storage_root.clone());
-            scp::Server::new(cfg.dicom_server.clone(), store, db.clone(), db).run()?;
+            // one store, four ports: mappings + filter + callers
+            scp::Server::new(
+                cfg.dicom_server.clone(),
+                store,
+                db.clone(),
+                db.clone(),
+                db.clone(),
+            )
+            .run()?;
         }
         StorageBackend::S3 => {
             let store = S3ObjectStore::connect(&cfg.aws.s3_bucket, "studies")?;
-            scp::Server::new(cfg.dicom_server.clone(), store, db.clone(), db).run()?;
+            scp::Server::new(
+                cfg.dicom_server.clone(),
+                store,
+                db.clone(),
+                db.clone(),
+                db.clone(),
+            )
+            .run()?;
         }
     }
 

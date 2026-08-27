@@ -4,15 +4,16 @@
 //! `PgStore` is that handle: a pool plus a private tokio runtime,
 //! clone-cheap. Each module implements its core port for `PgStore` —
 //! `mappings` implements `MappingStore`, `callers` implements
-//! `CallerDirectory`, `rules` implements `RuleDirectory` — and owns
-//! its row model plus the row ↔ domain conversion, so SQL never
-//! leaks into `models` and the models never learn SQL exists. A new
-//! table gets its own module here.
+//! `CallerDirectory`, `rules` implements `RuleDirectory`, `filter`
+//! implements `FilterDirectory` — and owns its row model plus the
+//! row ↔ domain conversion, so SQL never leaks into `models` and the
+//! models never learn SQL exists. A new table gets its own module.
 //!
 //! These tables hold user-managed domain data — the things a frontend
 //! edits — as opposed to deployment config, which lives in env vars.
 
 mod callers;
+mod filter;
 mod mappings;
 mod rules;
 

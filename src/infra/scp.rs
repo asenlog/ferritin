@@ -8,7 +8,7 @@
 
 use crate::app::dicom::dimse;
 use crate::app::models::auth::AuthorizedCaller;
-use crate::app::ports::{CallerDirectory, MappingStore, ObjectStore};
+use crate::app::ports::{CallerDirectory, FilterDirectory, MappingStore, ObjectStore};
 use crate::app::service::intake::{IntakeError, IntakeService};
 use crate::config::DICOMServerConfig;
 use anyhow::Context;
@@ -65,17 +65,29 @@ impl AccessControl for NodeAccessControl<'_> {
     }
 }
 
-pub struct Server<S: ObjectStore, M: MappingStore, C: CallerDirectory> {
+pub struct Server<S, M, F, C>
+where
+    S: ObjectStore,
+    M: MappingStore,
+    F: FilterDirectory,
+    C: CallerDirectory,
+{
     config: DICOMServerConfig,
-    intake: IntakeService<S, M>,
+    intake: IntakeService<S, M, F>,
     callers: C,
 }
 
-impl<S: ObjectStore, M: MappingStore, C: CallerDirectory> Server<S, M, C> {
-    pub fn new(config: DICOMServerConfig, store: S, mappings: M, callers: C) -> Self {
+impl<S, M, F, C> Server<S, M, F, C>
+where
+    S: ObjectStore,
+    M: MappingStore,
+    F: FilterDirectory,
+    C: CallerDirectory,
+{
+    pub fn new(config: DICOMServerConfig, store: S, mappings: M, filter: F, callers: C) -> Self {
         Self {
             config,
-            intake: IntakeService::new(store, mappings),
+            intake: IntakeService::new(store, mappings, filter),
             callers,
         }
     }
@@ -278,6 +290,7 @@ fn status_for(error: &IntakeError) -> u16 {
         IntakeError::UnsupportedTransferSyntax(_) | IntakeError::MalformedDataset(_) => {
             dimse::status::CANNOT_UNDERSTAND
         }
+        IntakeError::Filtered(_) => dimse::status::REFUSED_DATASET_MISMATCH,
         IntakeError::Mapping(_) | IntakeError::Store(_) => dimse::status::REFUSED_OUT_OF_RESOURCES,
     }
 }

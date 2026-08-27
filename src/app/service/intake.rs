@@ -1,21 +1,22 @@
 //! Intake pipeline for received DICOM instances: parse the dataset,
-//! de-identify it against the per-study pseudonym mapping, wrap it
-//! into a proper Part-10 file, and persist it through the
-//! `ObjectStore` port.
+//! filter it against the intake policy, de-identify it against the
+//! per-study pseudonym mapping, wrap it into a proper Part-10 file,
+//! and persist it through the `ObjectStore` port.
 //!
 //! Knows nothing about sockets, PDUs, or DIMSE statuses — the SCP
 //! adapter maps `IntakeError` onto wire statuses.
 
 use crate::app::dicom::anonymize;
-use crate::app::ports::MappingStore;
-use crate::app::ports::ObjectStore;
+use crate::app::models::filter;
+use crate::app::ports::{FilterDirectory, MappingStore, ObjectStore};
 use dicom_dictionary_std::tags;
 use dicom_object::{FileMetaTableBuilder, InMemDicomObject};
 use dicom_transfer_syntax_registry::{TransferSyntaxIndex, TransferSyntaxRegistry};
 
-pub struct IntakeService<S, M> {
+pub struct IntakeService<S, M, F> {
     store: S,
     mappings: M,
+    filter: F,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -26,6 +27,9 @@ pub enum IntakeError {
     #[error("malformed dataset: {0}")]
     MalformedDataset(String),
 
+    #[error("rejected by intake filter: {0}")]
+    Filtered(String),
+
     #[error("failed to resolve pseudonym mapping: {0}")]
     Mapping(String),
 
@@ -33,9 +37,13 @@ pub enum IntakeError {
     Store(String),
 }
 
-impl<S: ObjectStore, M: MappingStore> IntakeService<S, M> {
-    pub fn new(store: S, mappings: M) -> Self {
-        Self { store, mappings }
+impl<S: ObjectStore, M: MappingStore, F: FilterDirectory> IntakeService<S, M, F> {
+    pub fn new(store: S, mappings: M, filter: F) -> Self {
+        Self {
+            store,
+            mappings,
+            filter,
+        }
     }
 
     /// Parse a received dataset encoded in `ts_uid` and persist it.
@@ -52,6 +60,23 @@ impl<S: ObjectStore, M: MappingStore> IntakeService<S, M> {
             .ok_or_else(|| IntakeError::MalformedDataset("missing SOP Instance UID".into()))?;
         let study_uid = uid_of(&obj, tags::STUDY_INSTANCE_UID).unwrap_or("unknown".into());
         let series_uid = uid_of(&obj, tags::SERIES_INSTANCE_UID).unwrap_or("unknown".into());
+
+        // Policy first: reject before any mapping or storage work.
+        // The policy is read fresh per instance so frontend edits
+        // apply to the very next object. A policy we cannot load
+        // fails closed — better to refuse than to let everything
+        // through while the filter DB is down.
+        let policy = self
+            .filter
+            .filter_policy()
+            .map_err(|e| IntakeError::Filtered(format!("policy unavailable: {e}")))?;
+        filter::evaluate(
+            &policy,
+            uid_of(&obj, tags::MODALITY).as_deref(),
+            uid_of(&obj, tags::SOP_CLASS_UID).as_deref(),
+            uid_of(&obj, tags::MANUFACTURER).as_deref(),
+        )
+        .map_err(|rejection| IntakeError::Filtered(rejection.to_string()))?;
 
         // De-identify before anything hits disk. A study without a UID
         // cannot be mapped; it is stored as-is (fail-open), matching
@@ -143,11 +168,26 @@ mod tests {
 
     fn intake(
         dir: &std::path::Path,
-    ) -> IntakeService<crate::infra::store::FsObjectStore, InMemoryMappingStore> {
+    ) -> IntakeService<crate::infra::store::FsObjectStore, InMemoryMappingStore, StaticFilter> {
         IntakeService::new(
             crate::infra::store::FsObjectStore::new(dir),
             InMemoryMappingStore::default(),
+            StaticFilter::allow_all(),
         )
+    }
+
+    struct StaticFilter(crate::app::models::filter::FilterPolicy);
+
+    impl StaticFilter {
+        fn allow_all() -> Self {
+            Self(crate::app::models::filter::FilterPolicy::default())
+        }
+    }
+
+    impl crate::app::ports::FilterDirectory for StaticFilter {
+        fn filter_policy(&self) -> anyhow::Result<crate::app::models::filter::FilterPolicy> {
+            Ok(self.0.clone())
+        }
     }
 
     #[test]
@@ -208,5 +248,26 @@ mod tests {
             .store_instance(uids::IMPLICIT_VR_LITTLE_ENDIAN, b"not a dicom dataset")
             .unwrap_err();
         assert!(matches!(err, IntakeError::MalformedDataset(_)));
+    }
+
+    #[test]
+    fn policy_rejection_stops_the_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let intake = IntakeService::new(
+            crate::infra::store::FsObjectStore::new(dir.path()),
+            InMemoryMappingStore::default(),
+            StaticFilter(crate::app::models::filter::FilterPolicy {
+                // the fixture dataset is CT — MG-only policy rejects it
+                allow_modalities: vec![crate::app::models::modality::ModalityType::MG],
+                ..Default::default()
+            }),
+        );
+
+        let err = intake
+            .store_instance(uids::IMPLICIT_VR_LITTLE_ENDIAN, &dataset_bytes())
+            .unwrap_err();
+
+        assert!(matches!(err, IntakeError::Filtered(_)));
+        assert!(std::fs::read_dir(dir.path()).unwrap().next().is_none());
     }
 }

@@ -6,8 +6,9 @@
 //! implementing a foreign trait for a foreign type from a test crate.
 
 use ferritin::app::models::auth::AuthorizedCaller;
+use ferritin::app::models::filter::FilterPolicy;
 use ferritin::app::models::rules::ForwardingRule;
-use ferritin::app::ports::{CallerDirectory, RuleDirectory};
+use ferritin::app::ports::{CallerDirectory, FilterDirectory, RuleDirectory};
 
 // each test crate compiles this module and uses only what it needs
 #[allow(dead_code)]
@@ -24,6 +25,22 @@ pub struct StaticRules(pub Vec<ForwardingRule>);
 
 impl RuleDirectory for StaticRules {
     fn forwarding_rules(&self) -> anyhow::Result<Vec<ForwardingRule>> {
+        Ok(self.0.clone())
+    }
+}
+
+#[allow(dead_code)]
+pub struct StaticFilter(pub FilterPolicy);
+
+#[allow(dead_code)]
+impl StaticFilter {
+    pub fn allow_all() -> Self {
+        Self(FilterPolicy::default())
+    }
+}
+
+impl FilterDirectory for StaticFilter {
+    fn filter_policy(&self) -> anyhow::Result<FilterPolicy> {
         Ok(self.0.clone())
     }
 }
