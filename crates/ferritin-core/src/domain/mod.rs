@@ -1,15 +1,14 @@
-//! Domain layer: the types and ports the rest of the crate is built
-//! around, one module per aggregate.
+//! Domain layer: the types the rest of the crate is built around,
+//! one module per aggregate — types only.
 //!
-//! `auth` — who may push to this node (`AuthorizedCaller`,
-//! `CallerDirectory`). `rules` — where results are routed
-//! (`ForwardingRule`, `Destination`, `RuleDirectory`). `mappings` —
-//! per-study de-identification records (`StudyMapping`,
-//! `MappingStore`). `models` — shared vocabulary (`ModalityType`).
+//! `auth` — who may push to this node (`AuthorizedCaller`). `rules`
+//! — where results are routed (`ForwardingRule`, `Destination`,
+//! `resolve`). `mappings` — per-study de-identification records
+//! (`StudyMapping`). `models` — shared vocabulary (`ModalityType`).
 //!
-//! Implementations of the ports live elsewhere (`db` repositories,
-//! in-memory test adapters); nothing in `domain` knows SQL or
-//! sockets exist.
+//! Ports (the traits over these types) live in `ports`; their
+//! implementations live at the edges (`db` repositories, adapters)
+//! or in `fixtures`. Nothing in `domain` knows SQL or sockets exist.
 
 pub mod auth;
 pub mod mappings;

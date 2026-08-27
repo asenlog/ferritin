@@ -15,14 +15,24 @@
 
 ## Layout
 
-- `src/` — the binary: env config loading + wiring
-- `crates/ferritin-core/src/domain/` — domain types and ports, one
-  module per aggregate (`auth`, `rules`, `mappings`, `models`);
-  nothing here knows SQL or sockets exist
+- `src/` — the binary: env config loading + wiring (composition root)
+- `crates/ferritin-core/src/domain/` — domain types, one module per
+  aggregate (`auth`, `rules`, `mappings`, `models`); nothing here
+  knows SQL or sockets exist. **Types only — no traits, no impls**
+- `crates/ferritin-core/src/ports.rs` — every port trait, in one
+  module (synapse's `app/ports` analog); signatures over domain
+  types, no bodies
+- `crates/ferritin-core/src/service/` — orchestrators (`intake`,
+  `anonymize`, `forward`) composing domain ports only; no concrete
+  infrastructure types
 - `crates/ferritin-core/src/db/` — database layer, one repository
   module per table/aggregate implementing its port for `PgStore`;
   a new table gets its own module. Row models and row ↔ domain
   conversions live here, never in `domain/`
+- `crates/ferritin-core/tests/fixtures/` — static port adapters for
+  integration tests (Null Objects over `Vec`); no logic, ever
+- `crates/ferritin-core/src/{scp,scu,dimse,store}.rs` — edge
+  adapters: DICOM network I/O and the filesystem object store
 - `crates/ferritin-cloud/` — adapters to external systems, one module
   per system (`aws::s3`, `aws::sqs`)
 - `migrations/` — sqlx migrations at the workspace root, embedded at
@@ -32,6 +42,9 @@
   `sqlx migrate revert`. Every table carries `created_at` /
   `updated_at` (trigger-maintained) / `deleted_at` (soft delete);
   these stay out of the row models
+
+Dependency direction is one-way: `service` → `ports` → `domain` ←
+`db` / edge adapters / `ferritin-cloud`.
 
 ## Config boundary
 
@@ -45,3 +58,6 @@ README "Configuration" section.
 - `cargo test --workspace` — includes container tests
   (testcontainers: Postgres, LocalStack), so a running **Docker
   daemon is required**; they fail rather than skip without it
+- Keep the tree lint-clean: `cargo fmt --all -- --check` and
+  `cargo clippy --workspace --all-targets` must both pass before
+  pushing

@@ -2,8 +2,8 @@ mod config;
 use crate::config::{Config, StorageBackend};
 use ferritin_cloud::aws::s3::S3ObjectStore;
 use ferritin_cloud::aws::sqs::SqsResultListener;
-use ferritin_core::forward::ForwardingService;
 use ferritin_core::scu::ScuClient;
+use ferritin_core::service::forward::ForwardingService;
 use ferritin_core::{db::PgStore, scp, store::FsObjectStore};
 
 fn main() -> anyhow::Result<()> {

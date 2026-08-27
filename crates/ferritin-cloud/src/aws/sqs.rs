@@ -97,7 +97,10 @@ impl SqsResultListener {
             let mut handled = 0;
             for message in received.messages() {
                 let receipt = message.receipt_handle().unwrap_or_default().to_string();
-                match self.handle_message(message.body().unwrap_or_default(), &handler).await {
+                match self
+                    .handle_message(message.body().unwrap_or_default(), &handler)
+                    .await
+                {
                     Ok(()) => {
                         self.sqs
                             .delete_message()
@@ -135,9 +138,7 @@ impl SqsResultListener {
                 .key(&key)
                 .send()
                 .await
-                .with_context(|| {
-                    format!("failed to fetch s3://{}/{key}", record.s3.bucket.name)
-                })?;
+                .with_context(|| format!("failed to fetch s3://{}/{key}", record.s3.bucket.name))?;
             let bytes = object.body.collect().await?.into_bytes().to_vec();
             handler(FetchedResult {
                 bucket: record.s3.bucket.name,
@@ -248,7 +249,10 @@ mod tests {
     fn url_decodes_s3_keys() {
         assert_eq!(url_decode("plain/key.dcm").unwrap(), "plain/key.dcm");
         assert_eq!(url_decode("a+b.dcm").unwrap(), "a b.dcm");
-        assert_eq!(url_decode("studies/%2Froot.dcm").unwrap(), "studies//root.dcm");
+        assert_eq!(
+            url_decode("studies/%2Froot.dcm").unwrap(),
+            "studies//root.dcm"
+        );
         assert_eq!(url_decode("100%25.dcm").unwrap(), "100%.dcm");
     }
 

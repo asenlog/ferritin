@@ -6,6 +6,8 @@ pub use ferritin_core::config::DICOMServerConfig;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub dicom_server: DICOMServerConfig,
+    /// P3 placeholder — no HL7 settings exist yet (see ROADMAP).
+    #[allow(dead_code)]
     pub hl7_server: HL7ServerConfig,
     pub aws: AwsConfig,
     pub storage: StorageConfig,
@@ -99,7 +101,10 @@ mod test {
             "https://sqs.eu-central-1.amazonaws.com/123456789012/ferritin-results",
         );
         std::env::set_var("STORAGE_ROOT", "/var/lib/ferritin/storage");
-        std::env::set_var("DATABASE_URL", "postgres://ferritin@localhost:5432/ferritin");
+        std::env::set_var(
+            "DATABASE_URL",
+            "postgres://ferritin@localhost:5432/ferritin",
+        );
         std::env::set_var("STORAGE_BACKEND", "fs");
 
         let cfg = Config::load().unwrap();

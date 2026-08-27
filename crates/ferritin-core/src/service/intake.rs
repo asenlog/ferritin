@@ -6,9 +6,9 @@
 //! Knows nothing about sockets, PDUs, or DIMSE statuses — the SCP
 //! adapter maps `IntakeError` onto wire statuses.
 
-use crate::anonymize;
-use crate::domain::mappings::MappingStore;
-use crate::store::ObjectStore;
+use crate::ports::MappingStore;
+use crate::ports::ObjectStore;
+use crate::service::anonymize;
 use dicom_dictionary_std::tags;
 use dicom_object::{FileMetaTableBuilder, InMemDicomObject};
 use dicom_transfer_syntax_registry::{TransferSyntaxIndex, TransferSyntaxRegistry};
@@ -141,7 +141,9 @@ mod tests {
         bytes
     }
 
-    fn intake(dir: &std::path::Path) -> IntakeService<crate::store::FsObjectStore, InMemoryMappingStore> {
+    fn intake(
+        dir: &std::path::Path,
+    ) -> IntakeService<crate::store::FsObjectStore, InMemoryMappingStore> {
         IntakeService::new(
             crate::store::FsObjectStore::new(dir),
             InMemoryMappingStore::default(),
@@ -176,7 +178,11 @@ mod tests {
             .unwrap();
 
         let stored = dicom_object::open_file(dir.path().join(&key)).unwrap();
-        let patient_name = stored.element(tags::PATIENT_NAME).unwrap().to_str().unwrap();
+        let patient_name = stored
+            .element(tags::PATIENT_NAME)
+            .unwrap()
+            .to_str()
+            .unwrap();
         let patient_id = stored.element(tags::PATIENT_ID).unwrap().to_str().unwrap();
         assert!(patient_name.starts_with("ANON^"), "got {patient_name}");
         assert!(patient_id.starts_with("ANON-"), "got {patient_id}");

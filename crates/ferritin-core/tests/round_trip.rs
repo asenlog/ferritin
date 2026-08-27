@@ -13,15 +13,17 @@ use dicom_ul::association::server::ServerAssociationOptions;
 use dicom_ul::pdu::{PDataValue, PDataValueType, Pdu, PresentationContextResultReason};
 use ferritin_core::config::DICOMServerConfig;
 use ferritin_core::db::InMemoryMappingStore;
-use ferritin_core::domain::mappings::MappingStore;
-use ferritin_core::forward::{ForwardError, ForwardingService};
+use ferritin_core::ports::MappingStore;
 use ferritin_core::scp::Server;
 use ferritin_core::scu::ScuClient;
+use ferritin_core::service::forward::{ForwardError, ForwardingService};
 use ferritin_core::store::FsObjectStore;
 use ferritin_core::{dimse, domain::rules};
 use std::collections::HashMap;
 use std::net::{SocketAddr, TcpListener};
 use std::sync::{Arc, Mutex};
+
+mod fixtures;
 
 const CT_IMAGE_STORAGE: &str = uids::CT_IMAGE_STORAGE;
 const SOP_INSTANCE_UID: &str = "1.2.3.4.5.6.7.8.9";
@@ -30,9 +32,21 @@ const SERIES_INSTANCE_UID: &str = "1.2.3.4.5.6";
 
 fn identified_dataset(ts_uid: &str) -> Vec<u8> {
     let obj = InMemDicomObject::from_element_iter([
-        DataElement::new(tags::SOP_CLASS_UID, VR::UI, dicom_value!(Str, CT_IMAGE_STORAGE)),
-        DataElement::new(tags::SOP_INSTANCE_UID, VR::UI, dicom_value!(Str, SOP_INSTANCE_UID)),
-        DataElement::new(tags::STUDY_INSTANCE_UID, VR::UI, dicom_value!(Str, STUDY_INSTANCE_UID)),
+        DataElement::new(
+            tags::SOP_CLASS_UID,
+            VR::UI,
+            dicom_value!(Str, CT_IMAGE_STORAGE),
+        ),
+        DataElement::new(
+            tags::SOP_INSTANCE_UID,
+            VR::UI,
+            dicom_value!(Str, SOP_INSTANCE_UID),
+        ),
+        DataElement::new(
+            tags::STUDY_INSTANCE_UID,
+            VR::UI,
+            dicom_value!(Str, STUDY_INSTANCE_UID),
+        ),
         DataElement::new(
             tags::SERIES_INSTANCE_UID,
             VR::UI,
@@ -55,9 +69,18 @@ fn identified_dataset(ts_uid: &str) -> Vec<u8> {
     bytes
 }
 
+/// A captured dataset: negotiated transfer syntax + raw bytes.
+type CapturedDatasets = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+
+/// A running capture SCP: its address and the datasets it received.
+struct Destination {
+    addr: SocketAddr,
+    captured: CapturedDatasets,
+}
+
 /// A minimal DICOM sink: accepts anything, answers C-STORE with
 /// success, and captures raw datasets with their transfer syntax.
-fn spawn_destination() -> (SocketAddr, Arc<Mutex<Vec<(String, Vec<u8>)>>>) {
+fn spawn_destination() -> Destination {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
     let captured = Arc::new(Mutex::new(Vec::new()));
@@ -139,12 +162,17 @@ fn spawn_destination() -> (SocketAddr, Arc<Mutex<Vec<(String, Vec<u8>)>>>) {
             }
         }
     });
-    (addr, captured)
+    Destination { addr, captured }
 }
 
 fn text_of(obj: &InMemDicomObject, tag: dicom_core::Tag) -> String {
     obj.element(tag)
-        .map(|e| e.to_str().unwrap().trim_end_matches(['\0', ' ']).to_string())
+        .map(|e| {
+            e.to_str()
+                .unwrap()
+                .trim_end_matches(['\0', ' '])
+                .to_string()
+        })
         .unwrap_or_default()
 }
 
@@ -164,7 +192,7 @@ fn round_trip_restores_identity_at_the_destination() {
         },
         FsObjectStore::new(dir.path()),
         mappings.clone(),
-        vec!["TEST-SCU@127.0.0.1".parse().unwrap()],
+        fixtures::StaticCallers(vec!["TEST-SCU@127.0.0.1".parse().unwrap()]),
     );
     std::thread::spawn(move || {
         let _ = server.serve(listener);
@@ -208,25 +236,32 @@ fn round_trip_restores_identity_at_the_destination() {
     client.send(&Pdu::ReleaseRQ).unwrap();
 
     // intake stored the de-identified Part-10 file
-    let stored_path = dir
-        .path()
-        .join(format!("{STUDY_INSTANCE_UID}/{SERIES_INSTANCE_UID}/{SOP_INSTANCE_UID}.dcm"));
+    let stored_path = dir.path().join(format!(
+        "{STUDY_INSTANCE_UID}/{SERIES_INSTANCE_UID}/{SOP_INSTANCE_UID}.dcm"
+    ));
     let stored = std::fs::read(&stored_path).unwrap();
     let stored_obj = dicom_object::from_reader(&stored[..]).unwrap();
     assert!(text_of(&stored_obj, tags::PATIENT_NAME).starts_with("ANON^"));
 
     // 3. the forwarding pipeline treats the stored object as a cloud
     //    result: re-identify and forward to the destination AE
-    let (dest_addr, captured) = spawn_destination();
-    let rule = format!("CT - {CT_IMAGE_STORAGE} - DEST@127.0.0.1:{}", dest_addr.port())
-        .parse()
-        .unwrap();
-    let forwarding = ForwardingService::new(mappings, vec![rule], ScuClient::new("FERRITIN"));
+    let destination = spawn_destination();
+    let rule = format!(
+        "CT - {CT_IMAGE_STORAGE} - DEST@127.0.0.1:{}",
+        destination.addr.port()
+    )
+    .parse()
+    .unwrap();
+    let forwarding = ForwardingService::new(
+        mappings,
+        fixtures::StaticRules(vec![rule]),
+        ScuClient::new("FERRITIN"),
+    );
 
     forwarding.forward_result(&stored).unwrap();
 
     // 4. the destination received the original identity
-    let captured = captured.lock().unwrap();
+    let captured = destination.captured.lock().unwrap();
     assert_eq!(captured.len(), 1);
     let (ts_uid, dataset) = &captured[0];
     let ts = dicom_transfer_syntax_registry::TransferSyntaxRegistry
@@ -235,7 +270,10 @@ fn round_trip_restores_identity_at_the_destination() {
     let received = InMemDicomObject::read_dataset_with_ts(&dataset[..], ts).unwrap();
     assert_eq!(text_of(&received, tags::PATIENT_NAME), "Doe^John");
     assert_eq!(text_of(&received, tags::PATIENT_ID), "PAT-1");
-    assert_eq!(text_of(&received, tags::STUDY_INSTANCE_UID), STUDY_INSTANCE_UID);
+    assert_eq!(
+        text_of(&received, tags::STUDY_INSTANCE_UID),
+        STUDY_INSTANCE_UID
+    );
     // blanked on intake, never recoverable
     assert_eq!(text_of(&received, tags::PATIENT_BIRTH_DATE), "");
 }
@@ -244,9 +282,21 @@ fn round_trip_restores_identity_at_the_destination() {
 fn forward_rejects_garbage_unknown_studies_and_unrouted() {
     fn part10(study_uid: &str) -> Vec<u8> {
         let obj = InMemDicomObject::from_element_iter([
-            DataElement::new(tags::SOP_CLASS_UID, VR::UI, dicom_value!(Str, CT_IMAGE_STORAGE)),
-            DataElement::new(tags::SOP_INSTANCE_UID, VR::UI, dicom_value!(Str, SOP_INSTANCE_UID)),
-            DataElement::new(tags::STUDY_INSTANCE_UID, VR::UI, dicom_value!(Str, study_uid)),
+            DataElement::new(
+                tags::SOP_CLASS_UID,
+                VR::UI,
+                dicom_value!(Str, CT_IMAGE_STORAGE),
+            ),
+            DataElement::new(
+                tags::SOP_INSTANCE_UID,
+                VR::UI,
+                dicom_value!(Str, SOP_INSTANCE_UID),
+            ),
+            DataElement::new(
+                tags::STUDY_INSTANCE_UID,
+                VR::UI,
+                dicom_value!(Str, study_uid),
+            ),
             DataElement::new(tags::MODALITY, VR::CS, dicom_value!(Str, "CT")),
         ]);
         let mut bytes = Vec::new();
@@ -265,7 +315,11 @@ fn forward_rejects_garbage_unknown_studies_and_unrouted() {
     let rule: rules::ForwardingRule = format!("CT - {CT_IMAGE_STORAGE} - DEST@127.0.0.1:9")
         .parse()
         .unwrap();
-    let forwarding = ForwardingService::new(mappings, vec![rule], ScuClient::new("FERRITIN"));
+    let forwarding = ForwardingService::new(
+        mappings,
+        fixtures::StaticRules(vec![rule]),
+        ScuClient::new("FERRITIN"),
+    );
     assert!(matches!(
         forwarding.forward_result(b"garbage"),
         Err(ForwardError::MalformedResult(_))
@@ -282,8 +336,11 @@ fn forward_rejects_garbage_unknown_studies_and_unrouted() {
     mappings
         .mapping_for(STUDY_INSTANCE_UID, "PAT-1", "Doe^John")
         .unwrap();
-    let no_rules: Vec<rules::ForwardingRule> = Vec::new();
-    let forwarding = ForwardingService::new(mappings, no_rules, ScuClient::new("FERRITIN"));
+    let forwarding = ForwardingService::new(
+        mappings,
+        fixtures::StaticRules(vec![]),
+        ScuClient::new("FERRITIN"),
+    );
     assert!(matches!(
         forwarding.forward_result(&part10(STUDY_INSTANCE_UID)),
         Err(ForwardError::NoRoute { .. })

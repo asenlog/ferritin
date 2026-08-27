@@ -1,10 +1,9 @@
-pub mod anonymize;
 pub mod config;
 pub mod db;
 pub mod dimse;
 pub mod domain;
-pub mod forward;
-pub mod intake;
+pub mod ports;
 pub mod scp;
 pub mod scu;
+pub mod service;
 pub mod store;

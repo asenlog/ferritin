@@ -5,7 +5,8 @@
 
 use super::PgStore;
 use crate::domain::models::ModalityType;
-use crate::domain::rules::{Destination, ForwardingRule, RuleDirectory};
+use crate::domain::rules::{Destination, ForwardingRule};
+use crate::ports::RuleDirectory;
 use anyhow::Context;
 
 impl RuleDirectory for PgStore {

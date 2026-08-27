@@ -77,20 +77,6 @@ pub fn resolve(
         .map(|rule| rule.destination.clone())
 }
 
-/// Where the forwarding-rule list is kept. The Postgres adapter
-/// serves the server; the `Vec` impl serves tests and fixtures.
-pub trait RuleDirectory {
-    /// Snapshot of the current rules. Read fresh per result so
-    /// changes take effect without a restart.
-    fn forwarding_rules(&self) -> anyhow::Result<Vec<ForwardingRule>>;
-}
-
-impl RuleDirectory for Vec<ForwardingRule> {
-    fn forwarding_rules(&self) -> anyhow::Result<Vec<ForwardingRule>> {
-        Ok(self.clone())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,8 +86,12 @@ mod tests {
 
     fn rules() -> Vec<ForwardingRule> {
         vec![
-            format!("MG - {TOMO} - PACS@192.168.1.10:104").parse().unwrap(),
-            format!("CT - {CT} - BACKUP@10.0.0.2:11112").parse().unwrap(),
+            format!("MG - {TOMO} - PACS@192.168.1.10:104")
+                .parse()
+                .unwrap(),
+            format!("CT - {CT} - BACKUP@10.0.0.2:11112")
+                .parse()
+                .unwrap(),
         ]
     }
 
@@ -134,7 +124,10 @@ mod tests {
             "MG - 1.2.3 - @192.168.1.10:104",
             "MG - 1.2.3 - PACS@192.168.1.10:notaport",
         ] {
-            assert!(bad.parse::<ForwardingRule>().is_err(), "expected rejection: {bad:?}");
+            assert!(
+                bad.parse::<ForwardingRule>().is_err(),
+                "expected rejection: {bad:?}"
+            );
         }
     }
 

@@ -1,24 +1,12 @@
-//! Outbound port for object persistence and retrieval, plus the local
-//! filesystem adapter used in development and on-prem deployments.
+//! Local filesystem adapter for the `ObjectStore` port, used in
+//! development and on-prem deployments.
 //!
 //! The S3 adapter in `ferritin-cloud` implements the same port; the
 //! core pipeline only ever sees `ObjectStore`.
 
+use crate::ports::ObjectStore;
 use anyhow::{ensure, Context};
 use std::path::PathBuf;
-
-/// Where processed DICOM objects are persisted and fetched back from
-/// (the fetch leg: results listener → fetch → re-identification).
-pub trait ObjectStore {
-    /// Store `bytes` under `key`. Keys are `/`-separated relative paths
-    /// (`{study}/{series}/{sop}.dcm`); implementations map them onto
-    /// their native addressing (filesystem paths, S3 keys, ...).
-    fn put(&self, key: &str, bytes: &[u8]) -> anyhow::Result<()>;
-
-    /// Fetch the object stored under `key`. Fails if the key does not
-    /// resolve or no object exists under it.
-    fn get(&self, key: &str) -> anyhow::Result<Vec<u8>>;
-}
 
 /// Persists objects as plain files under a root directory.
 pub struct FsObjectStore {

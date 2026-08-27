@@ -4,7 +4,7 @@
 
 use aws_config::BehaviorVersion;
 use ferritin_cloud::aws::s3::S3ObjectStore;
-use ferritin_core::store::ObjectStore;
+use ferritin_core::ports::ObjectStore;
 use std::sync::Arc;
 use testcontainers::runners::SyncRunner;
 use testcontainers_modules::localstack::LocalStack;

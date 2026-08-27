@@ -71,7 +71,10 @@ fn rig() -> Rig {
         // immediately, which keeps the failure-path assertion fast
         sqs.create_queue()
             .queue_name(QUEUE)
-            .attributes(aws_sdk_sqs::types::QueueAttributeName::VisibilityTimeout, "0")
+            .attributes(
+                aws_sdk_sqs::types::QueueAttributeName::VisibilityTimeout,
+                "0",
+            )
             .send()
             .await
             .unwrap();

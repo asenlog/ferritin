@@ -5,7 +5,8 @@
 //! never learns SQL exists. The in-memory sibling below serves tests.
 
 use super::PgStore;
-use crate::domain::mappings::{MappingStore, StudyMapping};
+use crate::domain::mappings::StudyMapping;
+use crate::ports::MappingStore;
 use anyhow::Context;
 use chrono::Utc;
 use sha2::{Digest, Sha256};

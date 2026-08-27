@@ -4,21 +4,66 @@
 //! association accept with called-AE / calling-AE / source-IP
 //! authorization, PDV reassembly, and DIMSE dispatch.
 //! Protocol decisions live in `dimse`, persistence in `intake`,
-//! authorization rules in `auth`; none of them knows this module exists.
+//! domain vocabulary in `domain`; none of them knows this module exists.
 
-use crate::domain::auth::{CallerDirectory, NodeAccessControl};
 use crate::config::DICOMServerConfig;
-use crate::domain::mappings::MappingStore;
 use crate::dimse;
-use crate::intake::{IntakeError, IntakeService};
-use crate::store::ObjectStore;
+use crate::domain::auth::AuthorizedCaller;
+use crate::ports::{CallerDirectory, MappingStore, ObjectStore};
+use crate::service::intake::{IntakeError, IntakeService};
 use anyhow::Context;
 use dicom_object::InMemDicomObject;
-use dicom_ul::association::server::{ServerAssociation, ServerAssociationOptions};
+use dicom_ul::association::server::{AccessControl, ServerAssociation, ServerAssociationOptions};
 use dicom_ul::association::Association;
-use dicom_ul::pdu::{PDataValue, PDataValueType, Pdu, PresentationContextResultReason};
+use dicom_ul::pdu::{
+    AssociationRJServiceUserReason, PDataValue, PDataValueType, Pdu,
+    PresentationContextResultReason, UserIdentity,
+};
 use std::collections::HashMap;
-use std::net::{TcpListener, TcpStream};
+use std::net::{IpAddr, TcpListener, TcpStream};
+
+/// dicom-ul access-control policy enforcing the caller directory.
+/// Rejects at the association level (A-ASSOCIATE-RJ), before any
+/// DIMSE traffic: a wrong called AE, an unknown calling AE, or a
+/// known AE calling from outside its network all get turned away.
+pub struct NodeAccessControl<'a> {
+    peer_addr: IpAddr,
+    callers: &'a [AuthorizedCaller],
+}
+
+impl<'a> NodeAccessControl<'a> {
+    pub fn new(peer_addr: IpAddr, callers: &'a [AuthorizedCaller]) -> Self {
+        Self { peer_addr, callers }
+    }
+}
+
+/// AE titles arrive space-padded to 16 chars; compare trimmed.
+fn ae_eq(a: &str, b: &str) -> bool {
+    a.trim_end() == b.trim_end()
+}
+
+impl AccessControl for NodeAccessControl<'_> {
+    fn check_access(
+        &self,
+        this_ae_title: &str,
+        calling_ae_title: &str,
+        called_ae_title: &str,
+        _user_identity: Option<&UserIdentity>,
+    ) -> Result<(), AssociationRJServiceUserReason> {
+        if !ae_eq(called_ae_title, this_ae_title) {
+            return Err(AssociationRJServiceUserReason::CalledAETitleNotRecognized);
+        }
+
+        let authorized = self.callers.iter().any(|caller| {
+            ae_eq(&caller.ae_title, calling_ae_title) && caller.network.contains(&self.peer_addr)
+        });
+        if !authorized {
+            return Err(AssociationRJServiceUserReason::CallingAETitleNotRecognized);
+        }
+
+        Ok(())
+    }
+}
 
 pub struct Server<S: ObjectStore, M: MappingStore, C: CallerDirectory> {
     config: DICOMServerConfig,
@@ -234,5 +279,57 @@ fn status_for(error: &IntakeError) -> u16 {
             dimse::status::CANNOT_UNDERSTAND
         }
         IntakeError::Mapping(_) | IntakeError::Store(_) => dimse::status::REFUSED_OUT_OF_RESOURCES,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn callers() -> Vec<AuthorizedCaller> {
+        vec![
+            "CT_SCANNER@10.0.0.5".parse().unwrap(),
+            "ORTHANC@192.168.1.0/24".parse().unwrap(),
+        ]
+    }
+
+    fn check(callers: &[AuthorizedCaller], peer: &str, calling: &str, called: &str) -> bool {
+        NodeAccessControl::new(peer.parse().unwrap(), callers)
+            .check_access("SYN_PROXY", calling, called, None)
+            .is_ok()
+    }
+
+    #[test]
+    fn accepts_authorized_caller_from_its_network() {
+        assert!(check(&callers(), "10.0.0.5", "CT_SCANNER", "SYN_PROXY"));
+        assert!(check(&callers(), "192.168.1.77", "ORTHANC", "SYN_PROXY"));
+        // space-padded AE titles, as they arrive on the wire
+        assert!(check(
+            &callers(),
+            "10.0.0.5",
+            "CT_SCANNER      ",
+            "SYN_PROXY"
+        ));
+    }
+
+    #[test]
+    fn rejects_known_ae_from_foreign_network() {
+        assert!(!check(&callers(), "10.0.0.6", "CT_SCANNER", "SYN_PROXY"));
+        assert!(!check(&callers(), "192.168.2.77", "ORTHANC", "SYN_PROXY"));
+    }
+
+    #[test]
+    fn rejects_unknown_calling_ae() {
+        assert!(!check(&callers(), "10.0.0.5", "STRANGER", "SYN_PROXY"));
+    }
+
+    #[test]
+    fn rejects_wrong_called_ae() {
+        assert!(!check(&callers(), "10.0.0.5", "CT_SCANNER", "SOMEONE_ELSE"));
+    }
+
+    #[test]
+    fn empty_caller_list_rejects_everyone() {
+        assert!(!check(&[], "127.0.0.1", "CT_SCANNER", "SYN_PROXY"));
     }
 }

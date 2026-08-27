@@ -57,7 +57,12 @@ impl ScuClient {
         let context_id = context.id;
         let ts = TransferSyntaxRegistry
             .get(&context.transfer_syntax)
-            .with_context(|| format!("negotiated unknown transfer syntax {}", context.transfer_syntax))?;
+            .with_context(|| {
+                format!(
+                    "negotiated unknown transfer syntax {}",
+                    context.transfer_syntax
+                )
+            })?;
 
         assoc.send(&Pdu::PData {
             data: vec![PDataValue {

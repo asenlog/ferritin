@@ -5,10 +5,11 @@
 //! A failure here leaves the queue message in place (the listener
 //! deletes only on success), so results are never lost silently.
 
-use crate::anonymize::deanonymize;
-use crate::domain::mappings::MappingStore;
-use crate::domain::rules::{self, RuleDirectory};
+use crate::domain::rules;
+use crate::ports::MappingStore;
+use crate::ports::RuleDirectory;
 use crate::scu::ScuClient;
+use crate::service::anonymize::deanonymize;
 use dicom_dictionary_std::tags;
 use dicom_object::InMemDicomObject;
 
@@ -27,7 +28,10 @@ pub enum ForwardError {
     UnknownStudy(String),
 
     #[error("no forwarding rule for {modality} / {sop_class_uid}")]
-    NoRoute { modality: String, sop_class_uid: String },
+    NoRoute {
+        modality: String,
+        sop_class_uid: String,
+    },
 
     #[error("mapping lookup failed: {0}")]
     Mapping(String),

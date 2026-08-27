@@ -8,13 +8,14 @@ use dicom_object::InMemDicomObject;
 use dicom_transfer_syntax_registry::TransferSyntaxIndex;
 use dicom_ul::association::client::ClientAssociationOptions;
 use dicom_ul::pdu::{PDataValue, PDataValueType, Pdu};
-use ferritin_core::domain::auth::AuthorizedCaller;
 use ferritin_core::config::DICOMServerConfig;
 use ferritin_core::db::InMemoryMappingStore;
 use ferritin_core::dimse;
 use ferritin_core::scp::Server;
 use ferritin_core::store::FsObjectStore;
 use std::net::TcpListener;
+
+mod fixtures;
 
 const CT_IMAGE_STORAGE: &str = uids::CT_IMAGE_STORAGE;
 const SOP_INSTANCE_UID: &str = "1.2.3.4.5.6.7.8.9";
@@ -30,8 +31,8 @@ fn test_config() -> DICOMServerConfig {
     }
 }
 
-fn test_callers() -> Vec<AuthorizedCaller> {
-    vec!["TEST-SCU@127.0.0.1".parse().unwrap()]
+fn test_callers() -> fixtures::StaticCallers {
+    fixtures::StaticCallers(vec!["TEST-SCU@127.0.0.1".parse().unwrap()])
 }
 
 fn dataset_bytes(ts_uid: &str) -> Vec<u8> {

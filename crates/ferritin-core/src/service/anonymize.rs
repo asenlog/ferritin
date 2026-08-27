@@ -59,7 +59,11 @@ pub fn deanonymize(obj: &mut InMemDicomObject, mapping: &StudyMapping) {
             dicom_core::VR::PN,
             mapping.patient_name.as_str(),
         ),
-        (tags::PATIENT_ID, dicom_core::VR::LO, mapping.patient_id.as_str()),
+        (
+            tags::PATIENT_ID,
+            dicom_core::VR::LO,
+            mapping.patient_id.as_str(),
+        ),
     ] {
         // keep the element's VR if it exists, else the dictionary one
         let vr = obj.element(tag).map(|elem| elem.vr()).unwrap_or(vr);

@@ -8,7 +8,7 @@
 
 use anyhow::{ensure, Context};
 use base64::Engine;
-use ferritin_core::store::ObjectStore;
+use ferritin_core::ports::ObjectStore;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
