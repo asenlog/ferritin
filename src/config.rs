@@ -43,6 +43,11 @@ impl Config {
             storage: StorageConfig {
                 storage_root: required("STORAGE_ROOT")?.into(),
                 database_url: required("DATABASE_URL")?,
+                backend: match required("STORAGE_BACKEND")?.as_str() {
+                    "fs" => StorageBackend::Fs,
+                    "s3" => StorageBackend::S3,
+                    other => return Err(ConfigError::InvalidStorageBackend(other.to_string())),
+                },
             },
         };
 
@@ -80,6 +85,14 @@ pub struct AwsConfig {
 pub struct StorageConfig {
     pub storage_root: PathBuf,
     pub database_url: String,
+    pub backend: StorageBackend,
+}
+
+/// Which `ObjectStore` adapter the server persists through.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum StorageBackend {
+    Fs,
+    S3,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -89,6 +102,9 @@ pub enum ConfigError {
 
     #[error("env var {0} is not a valid number")]
     InvalidNumber(String),
+
+    #[error("STORAGE_BACKEND must be \"fs\" or \"s3\", got {0:?}")]
+    InvalidStorageBackend(String),
 
     #[error("DICOM_RULES contains an empty rule (trailing comma?)")]
     EmptyDicomRule,
@@ -114,6 +130,7 @@ mod test {
         );
         std::env::set_var("STORAGE_ROOT", "/var/lib/ferritin/storage");
         std::env::set_var("DATABASE_URL", "postgres://ferritin@localhost:5432/ferritin");
+        std::env::set_var("STORAGE_BACKEND", "fs");
     }
 
     /// Builds a Config without touching process env — validate() tests must
@@ -135,6 +152,7 @@ mod test {
             storage: StorageConfig {
                 storage_root: PathBuf::from("/tmp/storage"),
                 database_url: "postgres://example.invalid/db".to_string(),
+                backend: StorageBackend::Fs,
             },
         }
     }
@@ -156,6 +174,7 @@ mod test {
             cfg.storage.database_url,
             "postgres://ferritin@localhost:5432/ferritin"
         );
+        assert_eq!(cfg.storage.backend, StorageBackend::Fs);
     }
 
     #[test]

@@ -27,8 +27,8 @@ auto-retrying job queues for both the outbound (upload) and inbound
 - [x] `scp`: association accept + AET/IP authorization (ferritin-core)
 - [x] `filter`: Modality/SOP-Class allowlist + vendor blocklist (ferritin-core)
 - [x] `anonymize` + `db`: per-study mapping, Replace/Keep tag transform (ferritin-core)
-- [ ] `s3`: content-hash + upload with deterministic key convention (ferritin-cloud)
-- [ ] `sqs`: results-queue listener (S3-event message format) (ferritin-cloud)
+- [x] `s3`: content-hash + upload with deterministic key convention (ferritin-cloud)
+- [x] `sqs`: results-queue listener (S3-event message format) (ferritin-cloud)
 - [ ] `deanonymize` + `scu`: re-identify, resolve destination, forward (ferritin-core)
 - [ ] Forwarding rules + destination nodes in Postgres — `DICOM_RULES`
       moves out of env into the user-managed tables (frontend-managed)

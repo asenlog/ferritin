@@ -50,7 +50,9 @@ The boundary between env and database is deliberate:
 - **Env — deployment config.** This node's own identity and
   infrastructure, set once per deployment: `FACILITY_NAME`,
   `LISTEN_HOST` / `LISTEN_PORT` / `LISTEN_AE_TITLE`, `S3_BUCKET`,
-  `SQS_QUEUE_URL`, `STORAGE_ROOT`, `DATABASE_URL`, `DICOM_RULES`.
+  `SQS_QUEUE_URL`, `STORAGE_ROOT`, `DATABASE_URL`, `DICOM_RULES`,
+  `STORAGE_BACKEND` (`fs` for local development, `s3` to persist
+  studies in the bucket).
 - **Database — user-managed domain data.** Everything a frontend
   administers at runtime. Today: the `authorized_callers` table
   (remote nodes allowed to push, as AE-title + CIDR rows) and the

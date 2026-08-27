@@ -1,5 +1,5 @@
-//! Outbound port for object persistence, plus the local filesystem
-//! adapter used in development and on-prem deployments.
+//! Outbound port for object persistence and retrieval, plus the local
+//! filesystem adapter used in development and on-prem deployments.
 //!
 //! The S3 adapter in `ferritin-cloud` implements the same port; the
 //! core pipeline only ever sees `ObjectStore`.
@@ -7,12 +7,17 @@
 use anyhow::{ensure, Context};
 use std::path::PathBuf;
 
-/// Where processed DICOM objects are persisted.
+/// Where processed DICOM objects are persisted and fetched back from
+/// (the fetch leg: results listener → fetch → re-identification).
 pub trait ObjectStore {
     /// Store `bytes` under `key`. Keys are `/`-separated relative paths
     /// (`{study}/{series}/{sop}.dcm`); implementations map them onto
     /// their native addressing (filesystem paths, S3 keys, ...).
     fn put(&self, key: &str, bytes: &[u8]) -> anyhow::Result<()>;
+
+    /// Fetch the object stored under `key`. Fails if the key does not
+    /// resolve or no object exists under it.
+    fn get(&self, key: &str) -> anyhow::Result<Vec<u8>>;
 }
 
 /// Persists objects as plain files under a root directory.
@@ -43,6 +48,11 @@ impl ObjectStore for FsObjectStore {
         }
         std::fs::write(&path, bytes).with_context(|| format!("failed to write {}", path.display()))
     }
+
+    fn get(&self, key: &str) -> anyhow::Result<Vec<u8>> {
+        let path = self.resolve(key)?;
+        std::fs::read(&path).with_context(|| format!("failed to read {}", path.display()))
+    }
 }
 
 #[cfg(test)]
@@ -58,6 +68,32 @@ mod tests {
 
         let written = dir.path().join("1.2.3/4.5.6/7.8.9.dcm");
         assert_eq!(std::fs::read(written).unwrap(), b"dicom-bytes");
+    }
+
+    #[test]
+    fn get_reads_back_what_put_wrote() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsObjectStore::new(dir.path());
+
+        store.put("1.2.3/4.5.6/7.8.9.dcm", b"dicom-bytes").unwrap();
+
+        assert_eq!(store.get("1.2.3/4.5.6/7.8.9.dcm").unwrap(), b"dicom-bytes");
+    }
+
+    #[test]
+    fn get_fails_for_missing_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsObjectStore::new(dir.path());
+
+        assert!(store.get("1.2.3/nothing-here.dcm").is_err());
+    }
+
+    #[test]
+    fn get_rejects_traversal_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsObjectStore::new(dir.path());
+
+        assert!(store.get("../escape.dcm").is_err());
     }
 
     #[test]
