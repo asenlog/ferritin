@@ -14,7 +14,7 @@ Decomposed into ordered sub-projects.
 ## P1 — DICOM core round-trip pipeline
 
 SCP intake (AET + source-IP authorized modalities) → Modality/SOP-Class
-filter → per-study de-identification (SQLite mapping) → object-store
+filter → per-study de-identification (Postgres mapping) → object-store
 upload → result-queue listener → fetch → re-identification → SCU
 forward-back to the resolved per-source destination AE. Persistent,
 auto-retrying job queues for both the outbound (upload) and inbound
@@ -24,12 +24,14 @@ auto-retrying job queues for both the outbound (upload) and inbound
       `crates/` libraries — `ferritin-core` (product +
       `ObjectStore`/`ResultQueue` ports), `ferritin-cloud` (S3/SQS adapters)
 - [x] `config`: env-based config loading, `.env` support (ferritin)
-- [ ] `scp`: association accept + AET/IP authorization (ferritin-core)
+- [x] `scp`: association accept + AET/IP authorization (ferritin-core)
 - [x] `filter`: Modality/SOP-Class allowlist + vendor blocklist (ferritin-core)
-- [ ] `anonymize` + `db`: per-study mapping, Replace/Keep tag transform (ferritin-core)
+- [x] `anonymize` + `db`: per-study mapping, Replace/Keep tag transform (ferritin-core)
 - [ ] `s3`: content-hash + upload with deterministic key convention (ferritin-cloud)
 - [ ] `sqs`: results-queue listener (S3-event message format) (ferritin-cloud)
 - [ ] `deanonymize` + `scu`: re-identify, resolve destination, forward (ferritin-core)
+- [ ] Forwarding rules + destination nodes in Postgres — `DICOM_RULES`
+      moves out of env into the user-managed tables (frontend-managed)
 - [ ] Outbound/inbound persistent retry-queue workers
 - [ ] Interop test against DCMTK `storescu`/`storescp`, synthetic
       fixtures only

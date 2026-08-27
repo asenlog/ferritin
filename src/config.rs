@@ -42,7 +42,7 @@ impl Config {
             },
             storage: StorageConfig {
                 storage_root: required("STORAGE_ROOT")?.into(),
-                sqlite_path: required("SQLITE_PATH")?.into(),
+                database_url: required("DATABASE_URL")?,
             },
         };
 
@@ -79,7 +79,7 @@ pub struct AwsConfig {
 #[derive(Debug, Clone)]
 pub struct StorageConfig {
     pub storage_root: PathBuf,
-    pub sqlite_path: PathBuf,
+    pub database_url: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -113,7 +113,7 @@ mod test {
             "https://sqs.eu-central-1.amazonaws.com/123456789012/ferritin-results",
         );
         std::env::set_var("STORAGE_ROOT", "/var/lib/ferritin/storage");
-        std::env::set_var("SQLITE_PATH", "/var/lib/ferritin/node.db");
+        std::env::set_var("DATABASE_URL", "postgres://ferritin@localhost:5432/ferritin");
     }
 
     /// Builds a Config without touching process env — validate() tests must
@@ -134,7 +134,7 @@ mod test {
             },
             storage: StorageConfig {
                 storage_root: PathBuf::from("/tmp/storage"),
-                sqlite_path: PathBuf::from("/tmp/node.db"),
+                database_url: "postgres://example.invalid/db".to_string(),
             },
         }
     }
@@ -153,8 +153,8 @@ mod test {
         assert!(cfg.rules.dicom_rules[1].starts_with("MG - 1.2.840.10008.5.1.4.1.1.13.1.3"));
         assert_eq!(cfg.aws.s3_bucket, "ferritin-exams");
         assert_eq!(
-            cfg.storage.sqlite_path,
-            PathBuf::from("/var/lib/ferritin/node.db")
+            cfg.storage.database_url,
+            "postgres://ferritin@localhost:5432/ferritin"
         );
     }
 
