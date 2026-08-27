@@ -1,16 +1,9 @@
-//! Database-backed ports: the per-study pseudonym mapping, the
-//! authorized-caller directory, and the forwarding-rule directory,
-//! all on Postgres, plus the in-memory adapters used in tests.
-//!
-//! These tables hold user-managed domain data — the things a frontend
-//! edits — as opposed to deployment config, which lives in env vars.
-//! The mapping ties the original patient identity of a study to the
-//! pseudonym the de-identification step replaces it with; the
-//! re-identification leg reads the same rows to restore results.
+//! Repository for the `study_mappings` table: the per-study
+//! de-identification records. Ties the original patient identity of a
+//! study to the pseudonym that replaced it; the re-identification leg
+//! reads the same rows to restore results.
 
-use crate::auth::{AuthorizedCaller, CallerDirectory};
-use crate::models::ModalityType;
-use crate::rules::{Destination, ForwardingRule, RuleDirectory};
+use super::PgStore;
 use anyhow::Context;
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
@@ -72,44 +65,6 @@ fn mapping_from_row(row: &sqlx::postgres::PgRow) -> anyhow::Result<StudyMapping>
     })
 }
 
-/// Postgres adapter for both database-backed ports. Owns a private
-/// tokio runtime (behind an `Arc`, so clones share it) so the sync
-/// ports can sit underneath the (blocking) SCP without forcing async
-/// into the association loop.
-#[derive(Clone)]
-pub struct PgStore {
-    pool: sqlx::PgPool,
-    runtime: Arc<tokio::runtime::Runtime>,
-}
-
-impl PgStore {
-    /// Connect and bring the schema up to date. Migrations run under
-    /// a Postgres advisory lock, so concurrent first boots serialize
-    /// instead of racing.
-    pub fn connect(database_url: &str) -> anyhow::Result<Self> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .context("failed to build tokio runtime for Postgres store")?;
-        let pool = runtime.block_on(async {
-            let pool = sqlx::PgPool::connect(database_url)
-                .await
-                .context("failed to connect to Postgres")?;
-            // resolved relative to the crate, so this is the
-            // workspace-root `migrations/` directory
-            sqlx::migrate!("../../migrations")
-                .run(&pool)
-                .await
-                .context("failed to run migrations")?;
-            anyhow::Ok(pool)
-        })?;
-        Ok(Self {
-            pool,
-            runtime: Arc::new(runtime),
-        })
-    }
-}
-
 impl MappingStore for PgStore {
     fn mapping_for(
         &self,
@@ -152,79 +107,6 @@ impl MappingStore for PgStore {
                 .await
                 .context("failed to look up study mapping")?;
             row.as_ref().map(mapping_from_row).transpose()
-        })
-    }
-}
-
-impl CallerDirectory for PgStore {
-    fn authorized_callers(&self) -> anyhow::Result<Vec<AuthorizedCaller>> {
-        use sqlx::Row;
-
-        self.runtime.block_on(async {
-            let rows = sqlx::query("SELECT ae_title, network FROM authorized_callers")
-                .fetch_all(&self.pool)
-                .await
-                .context("failed to load authorized callers")?;
-
-            // a malformed row authorizes no one (fail closed on that
-            // row) but must not lock out every other caller
-            let callers = rows
-                .iter()
-                .filter_map(|row| {
-                    let ae_title: String = row.try_get("ae_title").ok()?;
-                    let network: String = row.try_get("network").ok()?;
-                    format!("{ae_title}@{network}")
-                        .parse::<AuthorizedCaller>()
-                        .map_err(|e| {
-                            tracing::warn!("ignoring malformed authorized_callers row: {e:#}");
-                            e
-                        })
-                        .ok()
-                })
-                .collect();
-            Ok(callers)
-        })
-    }
-}
-
-impl RuleDirectory for PgStore {
-    fn forwarding_rules(&self) -> anyhow::Result<Vec<ForwardingRule>> {
-        use sqlx::Row;
-
-        self.runtime.block_on(async {
-            let rows =
-                sqlx::query("SELECT modality, sop_class_uid, ae_title, host, port FROM forwarding_rules")
-                    .fetch_all(&self.pool)
-                    .await
-                    .context("failed to load forwarding rules")?;
-
-            // a malformed row routes nothing (its studies get NoRoute)
-            // but must not break the rest of the table
-            let rules = rows
-                .iter()
-                .filter_map(|row| {
-                    let build = || -> anyhow::Result<ForwardingRule> {
-                        let port: i32 = row.try_get("port")?;
-                        Ok(ForwardingRule {
-                            modality: ModalityType::from(row.try_get::<String, _>("modality")?),
-                            sop_class_uid: row.try_get("sop_class_uid")?,
-                            destination: Destination {
-                                ae_title: row.try_get("ae_title")?,
-                                host: row.try_get("host")?,
-                                port: u16::try_from(port)
-                                    .with_context(|| format!("port {port} out of range"))?,
-                            },
-                        })
-                    };
-                    build()
-                        .map_err(|e| {
-                            tracing::warn!("ignoring malformed forwarding_rules row: {e:#}");
-                            e
-                        })
-                        .ok()
-                })
-                .collect();
-            Ok(rules)
         })
     }
 }
