@@ -6,8 +6,8 @@
 //! deletes only on success), so results are never lost silently.
 
 use crate::anonymize::deanonymize;
-use crate::db::MappingStore;
-use crate::rules::{self, RuleDirectory};
+use crate::domain::mappings::MappingStore;
+use crate::domain::rules::{self, RuleDirectory};
 use crate::scu::ScuClient;
 use dicom_dictionary_std::tags;
 use dicom_object::InMemDicomObject;

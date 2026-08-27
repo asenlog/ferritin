@@ -6,7 +6,7 @@
 //! `forward`; neither knows this module exists.
 
 use crate::dimse;
-use crate::rules::Destination;
+use crate::domain::rules::Destination;
 use anyhow::{bail, Context};
 use dicom_dictionary_std::tags;
 use dicom_object::InMemDicomObject;

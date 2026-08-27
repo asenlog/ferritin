@@ -4,8 +4,8 @@
 //! implementation.
 
 use super::PgStore;
-use crate::models::ModalityType;
-use crate::rules::{Destination, ForwardingRule, RuleDirectory};
+use crate::domain::models::ModalityType;
+use crate::domain::rules::{Destination, ForwardingRule, RuleDirectory};
 use anyhow::Context;
 
 impl RuleDirectory for PgStore {
@@ -14,7 +14,7 @@ impl RuleDirectory for PgStore {
 
         self.runtime.block_on(async {
             let rows = sqlx::query(
-                "SELECT modality, sop_class_uid, ae_title, host, port FROM forwarding_rules",
+                "SELECT modality, sop_class_uid, ae_title, host, port FROM forwarding_rules WHERE deleted_at IS NULL",
             )
             .fetch_all(&self.pool)
             .await

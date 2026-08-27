@@ -4,9 +4,12 @@
 //! `PgStore` is that handle: a pool plus a private tokio runtime,
 //! clone-cheap. Each module implements its core port for `PgStore` —
 //! `mappings` implements `MappingStore`, `callers` implements
-//! `CallerDirectory`, `rules` implements `RuleDirectory` — and hosts
-//! its in-memory test sibling where one exists. A new table gets its
-//! own module here rather than growing a grab-bag file.
+//! `CallerDirectory`, `rules` implements `RuleDirectory` — and owns
+//! its row model plus the row ↔ domain conversion, so SQL never
+//! leaks into the domain and the domain never learns SQL exists.
+//! Ports and domain types live outside `db`, next to their logic
+//! (`mappings`, `auth`, `rules`). A new table gets its own module
+//! here rather than growing a grab-bag file.
 //!
 //! These tables hold user-managed domain data — the things a frontend
 //! edits — as opposed to deployment config, which lives in env vars.
@@ -15,7 +18,7 @@ mod callers;
 mod mappings;
 mod rules;
 
-pub use mappings::{InMemoryMappingStore, MappingStore, StudyMapping};
+pub use mappings::InMemoryMappingStore;
 
 use anyhow::Context;
 use std::sync::Arc;

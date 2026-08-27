@@ -3,7 +3,7 @@
 //! next to the domain type; this is its Postgres implementation.
 
 use super::PgStore;
-use crate::auth::{AuthorizedCaller, CallerDirectory};
+use crate::domain::auth::{AuthorizedCaller, CallerDirectory};
 use anyhow::Context;
 
 impl CallerDirectory for PgStore {
@@ -11,7 +11,7 @@ impl CallerDirectory for PgStore {
         use sqlx::Row;
 
         self.runtime.block_on(async {
-            let rows = sqlx::query("SELECT ae_title, network FROM authorized_callers")
+            let rows = sqlx::query("SELECT ae_title, network FROM authorized_callers WHERE deleted_at IS NULL")
                 .fetch_all(&self.pool)
                 .await
                 .context("failed to load authorized callers")?;

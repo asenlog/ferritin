@@ -63,7 +63,8 @@ The boundary between env and database is deliberate:
 Migrations live in `migrations/` at the workspace root (sqlx,
 embedded in the binary at compile time) and run automatically at
 startup under a Postgres advisory lock, so concurrent first boots are
-safe.
+safe. Every migration is a reversible `.up.sql` / `.down.sql` pair —
+roll back with `sqlx migrate revert`.
 
 ## Useful references
 

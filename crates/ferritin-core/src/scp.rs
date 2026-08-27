@@ -6,9 +6,9 @@
 //! Protocol decisions live in `dimse`, persistence in `intake`,
 //! authorization rules in `auth`; none of them knows this module exists.
 
-use crate::auth::{CallerDirectory, NodeAccessControl};
+use crate::domain::auth::{CallerDirectory, NodeAccessControl};
 use crate::config::DICOMServerConfig;
-use crate::db::MappingStore;
+use crate::domain::mappings::MappingStore;
 use crate::dimse;
 use crate::intake::{IntakeError, IntakeService};
 use crate::store::ObjectStore;

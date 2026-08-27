@@ -8,7 +8,7 @@ use dicom_object::InMemDicomObject;
 use dicom_transfer_syntax_registry::TransferSyntaxIndex;
 use dicom_ul::association::client::ClientAssociationOptions;
 use dicom_ul::pdu::{PDataValue, PDataValueType, Pdu};
-use ferritin_core::auth::AuthorizedCaller;
+use ferritin_core::domain::auth::AuthorizedCaller;
 use ferritin_core::config::DICOMServerConfig;
 use ferritin_core::db::InMemoryMappingStore;
 use ferritin_core::dimse;

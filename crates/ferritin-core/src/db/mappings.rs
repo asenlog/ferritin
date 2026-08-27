@@ -1,42 +1,41 @@
-//! Repository for the `study_mappings` table: the per-study
-//! de-identification records. Ties the original patient identity of a
-//! study to the pseudonym that replaced it; the re-identification leg
-//! reads the same rows to restore results.
+//! Repository for the `study_mappings` table.
+//!
+//! Owns the row model and the row ↔ domain conversion: SQL never
+//! leaks past this module, and the domain (`mappings::StudyMapping`)
+//! never learns SQL exists. The in-memory sibling below serves tests.
 
 use super::PgStore;
+use crate::domain::mappings::{MappingStore, StudyMapping};
 use anyhow::Context;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-/// The de-identification record for one study.
-#[derive(Debug, Clone, PartialEq)]
-pub struct StudyMapping {
-    pub study_instance_uid: String,
-    pub patient_id: String,
-    pub patient_name: String,
-    pub anon_patient_id: String,
-    pub anon_patient_name: String,
-    pub created_at: DateTime<Utc>,
+/// The `study_mappings` row as persisted. Field-for-field the domain
+/// record today, but a separate type on purpose: schema changes stop
+/// here instead of rippling into the domain.
+#[derive(sqlx::FromRow)]
+struct StudyMappingRow {
+    study_instance_uid: String,
+    patient_id: String,
+    patient_name: String,
+    anon_patient_id: String,
+    anon_patient_name: String,
+    created_at: chrono::DateTime<Utc>,
 }
 
-/// Where per-study pseudonym mappings are kept.
-pub trait MappingStore {
-    /// Return the mapping for `study_instance_uid`, creating it on
-    /// first sight. Pseudonyms derive deterministically from the
-    /// study UID, so a repeated study always maps the same way.
-    fn mapping_for(
-        &self,
-        study_instance_uid: &str,
-        patient_id: &str,
-        patient_name: &str,
-    ) -> anyhow::Result<StudyMapping>;
-
-    /// Look up the mapping for a study without creating one — the
-    /// re-identification leg must not fabricate mappings for studies
-    /// it has never seen.
-    fn find(&self, study_instance_uid: &str) -> anyhow::Result<Option<StudyMapping>>;
+impl From<StudyMappingRow> for StudyMapping {
+    fn from(row: StudyMappingRow) -> Self {
+        Self {
+            study_instance_uid: row.study_instance_uid,
+            patient_id: row.patient_id,
+            patient_name: row.patient_name,
+            anon_patient_id: row.anon_patient_id,
+            anon_patient_name: row.anon_patient_name,
+            created_at: row.created_at,
+        }
+    }
 }
 
 /// Pseudonyms are a deterministic function of the study UID: any
@@ -52,18 +51,6 @@ fn pseudonyms(study_instance_uid: &str) -> (String, String) {
 const MAPPING_SELECT: &str = "SELECT study_instance_uid, patient_id, patient_name,
         anon_patient_id, anon_patient_name, created_at
      FROM study_mappings WHERE study_instance_uid = $1";
-
-fn mapping_from_row(row: &sqlx::postgres::PgRow) -> anyhow::Result<StudyMapping> {
-    use sqlx::Row;
-    Ok(StudyMapping {
-        study_instance_uid: row.try_get("study_instance_uid")?,
-        patient_id: row.try_get("patient_id")?,
-        patient_name: row.try_get("patient_name")?,
-        anon_patient_id: row.try_get("anon_patient_id")?,
-        anon_patient_name: row.try_get("anon_patient_name")?,
-        created_at: row.try_get("created_at")?,
-    })
-}
 
 impl MappingStore for PgStore {
     fn mapping_for(
@@ -90,23 +77,23 @@ impl MappingStore for PgStore {
             .await
             .context("failed to insert study mapping")?;
 
-            let row = sqlx::query(MAPPING_SELECT)
+            let row = sqlx::query_as::<_, StudyMappingRow>(MAPPING_SELECT)
                 .bind(study_instance_uid)
                 .fetch_one(&self.pool)
                 .await
                 .context("failed to read back study mapping")?;
-            mapping_from_row(&row)
+            Ok(row.into())
         })
     }
 
     fn find(&self, study_instance_uid: &str) -> anyhow::Result<Option<StudyMapping>> {
         self.runtime.block_on(async {
-            let row = sqlx::query(MAPPING_SELECT)
+            let row = sqlx::query_as::<_, StudyMappingRow>(MAPPING_SELECT)
                 .bind(study_instance_uid)
                 .fetch_optional(&self.pool)
                 .await
                 .context("failed to look up study mapping")?;
-            row.as_ref().map(mapping_from_row).transpose()
+            Ok(row.map(Into::into))
         })
     }
 }

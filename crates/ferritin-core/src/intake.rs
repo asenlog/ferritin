@@ -7,7 +7,7 @@
 //! adapter maps `IntakeError` onto wire statuses.
 
 use crate::anonymize;
-use crate::db::MappingStore;
+use crate::domain::mappings::MappingStore;
 use crate::store::ObjectStore;
 use dicom_dictionary_std::tags;
 use dicom_object::{FileMetaTableBuilder, InMemDicomObject};

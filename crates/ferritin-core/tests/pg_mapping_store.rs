@@ -3,9 +3,10 @@
 //! (testcontainers) that is stopped and removed on drop. Requires a
 //! running Docker daemon — no DATABASE_URL, no local Postgres install.
 
-use ferritin_core::auth::CallerDirectory;
-use ferritin_core::db::{MappingStore, PgStore};
-use ferritin_core::rules::RuleDirectory;
+use ferritin_core::domain::auth::CallerDirectory;
+use ferritin_core::db::PgStore;
+use ferritin_core::domain::mappings::MappingStore;
+use ferritin_core::domain::rules::RuleDirectory;
 use testcontainers::runners::SyncRunner;
 use testcontainers_modules::postgres::Postgres;
 
@@ -32,7 +33,7 @@ fn rig() -> (
 
 #[test]
 fn pg_mapping_round_trip() {
-    let (_container, store, _runtime, _pool) = rig();
+    let (_container, store, runtime, pool) = rig();
 
     // use a throwaway study UID per run so repeats never collide
     let study_uid = format!("1.2.3.test.{}", uuid::Uuid::new_v4());
@@ -52,6 +53,29 @@ fn pg_mapping_round_trip() {
     let other_uid = format!("1.2.3.test.{}", uuid::Uuid::new_v4());
     let other = store.mapping_for(&other_uid, "PAT-1", "Doe^John").unwrap();
     assert_ne!(first.anon_patient_id, other.anon_patient_id);
+
+    // audit columns stay out of the row model but are maintained:
+    // an UPDATE bumps updated_at past the insert-time created_at
+    let (created_at, updated_at) = runtime.block_on(async {
+        sqlx::query("UPDATE study_mappings SET patient_name = 'Doe^Jane' WHERE study_instance_uid = $1")
+            .bind(&study_uid)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let row = sqlx::query(
+            "SELECT created_at, updated_at FROM study_mappings WHERE study_instance_uid = $1",
+        )
+        .bind(&study_uid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        use sqlx::Row;
+        (
+            row.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+            row.get::<chrono::DateTime<chrono::Utc>, _>("updated_at"),
+        )
+    });
+    assert!(updated_at > created_at, "updated_at {updated_at} should be after created_at {created_at}");
 }
 
 #[test]
@@ -74,6 +98,15 @@ fn pg_caller_directory_round_trip() {
             .execute(&pool)
             .await
             .unwrap();
+        // a soft-deleted row: present in the table, gone from reads
+        sqlx::query(
+            "INSERT INTO authorized_callers (ae_title, network, deleted_at) VALUES ($1, $2, now())",
+        )
+        .bind(format!("GONE-{ae_title}"))
+        .bind("127.0.0.1")
+        .execute(&pool)
+        .await
+        .unwrap();
     });
 
     let callers = store.authorized_callers().unwrap();
@@ -87,6 +120,8 @@ fn pg_caller_directory_round_trip() {
 
     // ...and the malformed row is skipped instead of failing the load
     assert!(!callers.iter().any(|c| c.ae_title == format!("BAD-{ae_title}")));
+    // soft-deleted rows are invisible to directory reads
+    assert!(!callers.iter().any(|c| c.ae_title == format!("GONE-{ae_title}")));
 }
 
 #[test]
@@ -115,7 +150,7 @@ fn pg_rule_directory_round_trip() {
         .iter()
         .find(|r| r.sop_class_uid == "1.2.840.10008.5.1.4.1.1.13.1.3")
         .expect("inserted rule must be readable");
-    assert_eq!(rule.modality, ferritin_core::models::ModalityType::MG);
+    assert_eq!(rule.modality, ferritin_core::domain::models::ModalityType::MG);
     assert_eq!(rule.destination.ae_title, "PACS");
     assert_eq!(rule.destination.host, "192.168.1.10");
     assert_eq!(rule.destination.port, 104);

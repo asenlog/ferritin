@@ -7,7 +7,7 @@
 //! results can be matched back for re-identification. Full PS3.15
 //! Annex E profile coverage lands with the hardening phase.
 
-use crate::db::StudyMapping;
+use crate::domain::mappings::StudyMapping;
 use dicom_core::{dicom_value, DataElement, Tag};
 use dicom_dictionary_std::tags;
 use dicom_object::InMemDicomObject;
