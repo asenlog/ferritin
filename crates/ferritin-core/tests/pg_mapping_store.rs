@@ -179,7 +179,7 @@ fn pg_rule_directory_round_trip() {
         .expect("inserted rule must be readable");
     assert_eq!(
         rule.modality,
-        ferritin_core::domain::models::ModalityType::MG
+        ferritin_core::models::modality::ModalityType::MG
     );
     assert_eq!(rule.destination.ae_title, "PACS");
     assert_eq!(rule.destination.host, "192.168.1.10");

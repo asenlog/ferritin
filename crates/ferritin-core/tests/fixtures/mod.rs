@@ -5,8 +5,8 @@
 //! Newtypes rather than impls on `Vec`: the orphan rule forbids
 //! implementing a foreign trait for a foreign type from a test crate.
 
-use ferritin_core::domain::auth::AuthorizedCaller;
-use ferritin_core::domain::rules::ForwardingRule;
+use ferritin_core::models::auth::AuthorizedCaller;
+use ferritin_core::models::rules::ForwardingRule;
 use ferritin_core::ports::{CallerDirectory, RuleDirectory};
 
 // each test crate compiles this module and uses only what it needs

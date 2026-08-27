@@ -8,7 +8,7 @@
 
 use crate::config::DICOMServerConfig;
 use crate::dicom::dimse;
-use crate::domain::auth::AuthorizedCaller;
+use crate::models::auth::AuthorizedCaller;
 use crate::ports::{CallerDirectory, MappingStore, ObjectStore};
 use crate::service::intake::{IntakeError, IntakeService};
 use anyhow::Context;

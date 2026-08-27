@@ -3,7 +3,7 @@
 //! next to the domain type; this is its Postgres implementation.
 
 use super::PgStore;
-use crate::domain::auth::AuthorizedCaller;
+use crate::models::auth::AuthorizedCaller;
 use crate::ports::CallerDirectory;
 use anyhow::Context;
 

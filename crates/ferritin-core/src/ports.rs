@@ -5,7 +5,7 @@
 //! holds types only; this module holds traits only; nothing here has
 //! a body beyond a signature.
 
-use crate::domain::mappings::StudyMapping;
+use crate::models::mappings::StudyMapping;
 
 /// Where per-study pseudonym mappings are kept.
 pub trait MappingStore {
@@ -28,13 +28,13 @@ pub trait MappingStore {
 /// Where the authorized-caller list is kept. Read fresh per
 /// association so changes take effect without a restart.
 pub trait CallerDirectory {
-    fn authorized_callers(&self) -> anyhow::Result<Vec<crate::domain::auth::AuthorizedCaller>>;
+    fn authorized_callers(&self) -> anyhow::Result<Vec<crate::models::auth::AuthorizedCaller>>;
 }
 
 /// Where the forwarding-rule list is kept. Read fresh per result so
 /// changes take effect without a restart.
 pub trait RuleDirectory {
-    fn forwarding_rules(&self) -> anyhow::Result<Vec<crate::domain::rules::ForwardingRule>>;
+    fn forwarding_rules(&self) -> anyhow::Result<Vec<crate::models::rules::ForwardingRule>>;
 }
 
 /// Object persistence and retrieval (the fetch leg: results listener

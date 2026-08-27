@@ -6,7 +6,7 @@
 //! deletes only on success), so results are never lost silently.
 
 use crate::dicom::anonymize::deanonymize;
-use crate::domain::rules;
+use crate::models::rules;
 use crate::ports::MappingStore;
 use crate::ports::RuleDirectory;
 use crate::scu::ScuClient;

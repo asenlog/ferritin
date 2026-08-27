@@ -4,8 +4,8 @@
 //! implementation.
 
 use super::PgStore;
-use crate::domain::models::ModalityType;
-use crate::domain::rules::{Destination, ForwardingRule};
+use crate::models::modality::ModalityType;
+use crate::models::rules::{Destination, ForwardingRule};
 use crate::ports::RuleDirectory;
 use anyhow::Context;
 

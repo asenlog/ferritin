@@ -5,7 +5,7 @@
 //! e.g. `MG - 1.2.840.10008.5.1.4.1.1.13.1.3 - PACS@192.168.1.10:104`.
 //! These move into the database with the frontend-managed tables work.
 
-use crate::domain::models::ModalityType;
+use crate::models::modality::ModalityType;
 use anyhow::{anyhow, Context};
 use std::str::FromStr;
 

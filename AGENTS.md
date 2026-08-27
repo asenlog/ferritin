@@ -16,12 +16,12 @@
 ## Layout
 
 - `src/` — the binary: env config loading + wiring (composition root)
-- `crates/ferritin-core/src/domain/` — domain types, one module per
-  aggregate (`auth`, `rules`, `mappings`, `models`); nothing here
+- `crates/ferritin-core/src/models/` — domain models, one module per
+  aggregate (`auth`, `rules`, `mappings`, `modality`); nothing here
   knows SQL or sockets exist. **Types only — no traits, no impls**
 - `crates/ferritin-core/src/ports.rs` — every port trait, in one
   module (synapse's `app/ports` analog); signatures over domain
-  types, no bodies
+  model types, no bodies
 - `crates/ferritin-core/src/service/` — orchestrators (`intake`,
   `forward`) composing domain ports only; no concrete infrastructure
   types. Services here are always DI structs; pure DICOM logic lives
@@ -32,7 +32,7 @@
 - `crates/ferritin-core/src/db/` — database layer, one repository
   module per table/aggregate implementing its port for `PgStore`;
   a new table gets its own module. Row models and row ↔ domain
-  conversions live here, never in `domain/`
+  conversions live here, never in `models/`
 - `crates/ferritin-core/tests/fixtures/` — static port adapters for
   integration tests (Null Objects over `Vec`); no logic, ever
 - `crates/ferritin-core/src/{scp,scu,store}.rs` — edge
@@ -47,7 +47,7 @@
   `updated_at` (trigger-maintained) / `deleted_at` (soft delete);
   these stay out of the row models
 
-Dependency direction is one-way: `service` → `ports` → `domain` ←
+Dependency direction is one-way: `service` → `ports` → `models` ←
 `db` / edge adapters / `ferritin-cloud`.
 
 ## Config boundary
