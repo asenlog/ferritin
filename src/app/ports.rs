@@ -44,6 +44,32 @@ pub trait FilterDirectory {
     fn filter_policy(&self) -> anyhow::Result<crate::app::models::filter::FilterPolicy>;
 }
 
+/// A persistent, retrying queue of work units for the two legs
+/// (upload, forward). Enqueueing must be enough for a caller to
+/// consider the work durable; workers claim, complete, or fail
+/// (with backoff, `dead` after the attempt budget).
+pub trait JobQueue {
+    /// Persist a job for later processing.
+    fn enqueue(&self, job: crate::app::models::job::NewJob) -> anyhow::Result<()>;
+
+    /// Atomically claim the oldest due job of `kind`, if any.
+    fn claim(
+        &self,
+        kind: crate::app::models::job::JobKind,
+    ) -> anyhow::Result<Option<crate::app::models::job::Job>>;
+
+    /// Mark a claimed job successfully processed.
+    fn complete(&self, id: i64) -> anyhow::Result<()>;
+
+    /// Record a failure: retry with backoff, or mark `dead` once the
+    /// attempt budget is exhausted.
+    fn fail(&self, id: i64, error: &str) -> anyhow::Result<()>;
+
+    /// Requeue jobs stranded in `running` by a crash. Called at
+    /// worker startup (single-node assumption).
+    fn recover_running(&self, kind: crate::app::models::job::JobKind) -> anyhow::Result<u64>;
+}
+
 /// Object persistence and retrieval (the fetch leg: results listener
 /// → fetch → re-identification).
 pub trait ObjectStore {

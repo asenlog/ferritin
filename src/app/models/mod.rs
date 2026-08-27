@@ -6,6 +6,7 @@
 //! `resolve`). `mappings` — per-study de-identification records
 //! (`StudyMapping`). `modality` — shared vocabulary (`ModalityType`).
 //! `filter` — which studies are accepted (`FilterPolicy`, `evaluate`).
+//! `job` — retryable work units for the two legs (`Job`, `JobKind`).
 //!
 //! Ports (the traits over these types) live in `ports`; their
 //! implementations live at the edges (`db` repositories, adapters)
@@ -14,6 +15,7 @@
 
 pub mod auth;
 pub mod filter;
+pub mod job;
 pub mod mappings;
 pub mod modality;
 pub mod rules;

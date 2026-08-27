@@ -8,7 +8,7 @@
 
 use crate::app::dicom::dimse;
 use crate::app::models::auth::AuthorizedCaller;
-use crate::app::ports::{CallerDirectory, FilterDirectory, MappingStore, ObjectStore};
+use crate::app::ports::{CallerDirectory, FilterDirectory, JobQueue, MappingStore};
 use crate::app::service::intake::{IntakeError, IntakeService};
 use crate::config::DICOMServerConfig;
 use anyhow::Context;
@@ -65,29 +65,29 @@ impl AccessControl for NodeAccessControl<'_> {
     }
 }
 
-pub struct Server<S, M, F, C>
+pub struct Server<Q, M, F, C>
 where
-    S: ObjectStore,
+    Q: JobQueue,
     M: MappingStore,
     F: FilterDirectory,
     C: CallerDirectory,
 {
     config: DICOMServerConfig,
-    intake: IntakeService<S, M, F>,
+    intake: IntakeService<Q, M, F>,
     callers: C,
 }
 
-impl<S, M, F, C> Server<S, M, F, C>
+impl<Q, M, F, C> Server<Q, M, F, C>
 where
-    S: ObjectStore,
+    Q: JobQueue,
     M: MappingStore,
     F: FilterDirectory,
     C: CallerDirectory,
 {
-    pub fn new(config: DICOMServerConfig, store: S, mappings: M, filter: F, callers: C) -> Self {
+    pub fn new(config: DICOMServerConfig, queue: Q, mappings: M, filter: F, callers: C) -> Self {
         Self {
             config,
-            intake: IntakeService::new(store, mappings, filter),
+            intake: IntakeService::new(queue, mappings, filter),
             callers,
         }
     }

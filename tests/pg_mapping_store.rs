@@ -4,9 +4,9 @@
 //! running Docker daemon — no DATABASE_URL, no local Postgres install.
 
 use ferritin::app::ports::CallerDirectory;
-use ferritin::app::ports::FilterDirectory;
 use ferritin::app::ports::MappingStore;
 use ferritin::app::ports::RuleDirectory;
+use ferritin::app::ports::{FilterDirectory, JobQueue};
 use ferritin::infra::db::PgStore;
 use testcontainers::runners::SyncRunner;
 use testcontainers_modules::postgres::Postgres;
@@ -228,4 +228,96 @@ fn pg_filter_directory_round_trip() {
     );
     // soft-deleted rows are invisible, unknown kinds ignored
     assert_eq!(policy.block_vendors, vec!["EvilCorp".to_string()]);
+}
+
+#[test]
+fn pg_job_queue_lifecycle() {
+    let rig = rig();
+
+    rig.store
+        .enqueue(ferritin::app::models::job::NewJob {
+            kind: ferritin::app::models::job::JobKind::Upload,
+            key: "1.2.3/4.5/6.7.dcm".to_string(),
+            payload: b"dicom-bytes".to_vec(),
+        })
+        .unwrap();
+
+    // claim flips it to running and counts the attempt
+    let job = rig
+        .store
+        .claim(ferritin::app::models::job::JobKind::Upload)
+        .unwrap()
+        .expect("enqueued job must be claimable");
+    assert_eq!(job.attempts, 1);
+    assert_eq!(job.key, "1.2.3/4.5/6.7.dcm");
+    assert_eq!(job.payload, b"dicom-bytes");
+
+    // already claimed: nothing due
+    assert!(rig
+        .store
+        .claim(ferritin::app::models::job::JobKind::Upload)
+        .unwrap()
+        .is_none());
+
+    // a crash strands it in running; recovery requeues it
+    assert_eq!(
+        rig.store
+            .recover_running(ferritin::app::models::job::JobKind::Upload)
+            .unwrap(),
+        1
+    );
+    let job = rig
+        .store
+        .claim(ferritin::app::models::job::JobKind::Upload)
+        .unwrap()
+        .expect("recovered job must be claimable");
+    rig.store.complete(job.id).unwrap();
+    assert!(rig
+        .store
+        .claim(ferritin::app::models::job::JobKind::Upload)
+        .unwrap()
+        .is_none());
+
+    // a failed job goes back to pending with a future backoff...
+    rig.store
+        .enqueue(ferritin::app::models::job::NewJob {
+            kind: ferritin::app::models::job::JobKind::Upload,
+            key: "retry-me".to_string(),
+            payload: b"x".to_vec(),
+        })
+        .unwrap();
+    let job = rig
+        .store
+        .claim(ferritin::app::models::job::JobKind::Upload)
+        .unwrap()
+        .unwrap();
+    rig.store.fail(job.id, "boom").unwrap();
+    assert!(rig
+        .store
+        .claim(ferritin::app::models::job::JobKind::Upload)
+        .unwrap()
+        .is_none());
+
+    // ...and after max attempts it is dead-lettered, never claimable
+    rig.runtime.block_on(async {
+        sqlx::query(
+            "UPDATE jobs SET attempts = max_attempts, next_run_at = now() WHERE key = 'retry-me'",
+        )
+        .execute(&rig.pool)
+        .await
+        .unwrap();
+    });
+    let job = rig
+        .store
+        .claim(ferritin::app::models::job::JobKind::Upload)
+        .unwrap()
+        .unwrap();
+    rig.store.fail(job.id, "boom again").unwrap();
+    let (status,): (String,) = rig.runtime.block_on(async {
+        sqlx::query_as("SELECT status FROM jobs WHERE key = 'retry-me'")
+            .fetch_one(&rig.pool)
+            .await
+            .unwrap()
+    });
+    assert_eq!(status, "dead");
 }

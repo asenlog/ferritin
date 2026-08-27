@@ -5,6 +5,7 @@
 //!
 //! `intake` — parse received instances, filter, de-identify, persist.
 //! `forward` — re-identify a fetched result and route it home.
+//! `worker` — retrying queue consumers behind the two legs.
 //!
 //! Each service is unit-testable against in-memory port adapters;
 //! the DICOM, database, and object-store adapters at the edges never
@@ -12,3 +13,4 @@
 
 pub mod forward;
 pub mod intake;
+pub mod worker;

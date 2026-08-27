@@ -32,7 +32,7 @@ auto-retrying job queues for both the outbound (upload) and inbound
 - [x] `deanonymize` + `scu`: re-identify, resolve destination, forward (ferritin-core)
 - [x] Forwarding rules + destination nodes in Postgres — `DICOM_RULES`
       moves out of env into the user-managed tables (frontend-managed)
-- [ ] Outbound/inbound persistent retry-queue workers
+- [x] Outbound/inbound persistent retry-queue workers
 - [ ] Interop test against DCMTK `storescu`/`storescp`, synthetic
       fixtures only
 

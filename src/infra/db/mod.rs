@@ -14,9 +14,11 @@
 
 mod callers;
 mod filter;
+mod jobs;
 mod mappings;
 mod rules;
 
+pub use jobs::InMemoryJobQueue;
 pub use mappings::InMemoryMappingStore;
 
 use anyhow::Context;

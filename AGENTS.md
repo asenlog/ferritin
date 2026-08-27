@@ -26,8 +26,8 @@ and review, not the compiler — keep them.
 - `src/app/` — the application core (synapse's `internal/app`
   analog); nothing here touches SQL, sockets, files, or cloud SDKs:
   - `app/models/` — domain models, one module per aggregate (`auth`,
-    `rules`, `mappings`, `modality`, `filter`). **Types only — no
-    traits, no impls**
+    `rules`, `mappings`, `modality`, `filter`, `job`). **Types only —
+    no traits, no impls**
   - `app/ports.rs` — every port trait, in one module; signatures over
     domain model types, no bodies
   - `app/service/` — orchestrators (`intake`, `forward`) composing

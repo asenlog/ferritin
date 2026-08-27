@@ -1,20 +1,26 @@
 //! Intake pipeline for received DICOM instances: parse the dataset,
 //! filter it against the intake policy, de-identify it against the
 //! per-study pseudonym mapping, wrap it into a proper Part-10 file,
-//! and persist it through the `ObjectStore` port.
+//! and enqueue the upload through the `JobQueue` port.
+//!
+//! A C-STORE success means "durably queued", not "uploaded": the
+//! upload worker (kind `Upload`) performs the object-store put with
+//! retries, so a store outage or a crash never loses an accepted
+//! instance.
 //!
 //! Knows nothing about sockets, PDUs, or DIMSE statuses — the SCP
 //! adapter maps `IntakeError` onto wire statuses.
 
 use crate::app::dicom::anonymize;
 use crate::app::models::filter;
-use crate::app::ports::{FilterDirectory, MappingStore, ObjectStore};
+use crate::app::models::job::{JobKind, NewJob};
+use crate::app::ports::{FilterDirectory, JobQueue, MappingStore};
 use dicom_dictionary_std::tags;
 use dicom_object::{FileMetaTableBuilder, InMemDicomObject};
 use dicom_transfer_syntax_registry::{TransferSyntaxIndex, TransferSyntaxRegistry};
 
-pub struct IntakeService<S, M, F> {
-    store: S,
+pub struct IntakeService<Q, M, F> {
+    queue: Q,
     mappings: M,
     filter: F,
 }
@@ -37,17 +43,18 @@ pub enum IntakeError {
     Store(String),
 }
 
-impl<S: ObjectStore, M: MappingStore, F: FilterDirectory> IntakeService<S, M, F> {
-    pub fn new(store: S, mappings: M, filter: F) -> Self {
+impl<Q: JobQueue, M: MappingStore, F: FilterDirectory> IntakeService<Q, M, F> {
+    pub fn new(queue: Q, mappings: M, filter: F) -> Self {
         Self {
-            store,
+            queue,
             mappings,
             filter,
         }
     }
 
-    /// Parse a received dataset encoded in `ts_uid` and persist it.
-    /// Returns the storage key it was written under.
+    /// Parse a received dataset encoded in `ts_uid`, de-identify it,
+    /// and queue the upload. Returns the storage key it will be
+    /// written under.
     pub fn store_instance(&self, ts_uid: &str, dataset: &[u8]) -> Result<String, IntakeError> {
         let ts = TransferSyntaxRegistry
             .get(ts_uid)
@@ -108,8 +115,12 @@ impl<S: ObjectStore, M: MappingStore, F: FilterDirectory> IntakeService<S, M, F>
             .map_err(|e| IntakeError::Store(e.to_string()))?;
 
         let key = format!("{study_uid}/{series_uid}/{sop_instance_uid}.dcm");
-        self.store
-            .put(&key, &bytes)
+        self.queue
+            .enqueue(NewJob {
+                kind: JobKind::Upload,
+                key: key.clone(),
+                payload: bytes,
+            })
             .map_err(|e| IntakeError::Store(e.to_string()))?;
 
         Ok(key)
@@ -127,10 +138,14 @@ fn uid_of(obj: &InMemDicomObject, tag: dicom_core::Tag) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infra::db::InMemoryMappingStore;
+    use crate::app::ports::ObjectStore;
+    use crate::app::service::worker::QueueWorker;
+    use crate::infra::db::{InMemoryJobQueue, InMemoryMappingStore};
+    use crate::infra::store::FsObjectStore;
     use dicom_core::{dicom_value, DataElement, VR};
     use dicom_dictionary_std::uids;
     use dicom_transfer_syntax_registry::entries;
+    use std::path::Path;
 
     const CT_IMAGE_STORAGE: &str = uids::CT_IMAGE_STORAGE;
 
@@ -166,44 +181,62 @@ mod tests {
         bytes
     }
 
-    fn intake(
-        dir: &std::path::Path,
-    ) -> IntakeService<crate::infra::store::FsObjectStore, InMemoryMappingStore, StaticFilter> {
-        IntakeService::new(
-            crate::infra::store::FsObjectStore::new(dir),
-            InMemoryMappingStore::default(),
-            StaticFilter::allow_all(),
-        )
-    }
-
-    struct StaticFilter(crate::app::models::filter::FilterPolicy);
+    struct StaticFilter(filter::FilterPolicy);
 
     impl StaticFilter {
         fn allow_all() -> Self {
-            Self(crate::app::models::filter::FilterPolicy::default())
+            Self(filter::FilterPolicy::default())
         }
     }
 
-    impl crate::app::ports::FilterDirectory for StaticFilter {
-        fn filter_policy(&self) -> anyhow::Result<crate::app::models::filter::FilterPolicy> {
+    impl FilterDirectory for StaticFilter {
+        fn filter_policy(&self) -> anyhow::Result<filter::FilterPolicy> {
             Ok(self.0.clone())
         }
+    }
+
+    /// An intake with a clonable in-memory queue, so tests can keep a
+    /// handle and drain the upload leg themselves.
+    fn rig() -> (
+        IntakeService<InMemoryJobQueue, InMemoryMappingStore, StaticFilter>,
+        InMemoryJobQueue,
+    ) {
+        let queue = InMemoryJobQueue::default();
+        let intake = IntakeService::new(
+            queue.clone(),
+            InMemoryMappingStore::default(),
+            StaticFilter::allow_all(),
+        );
+        (intake, queue)
+    }
+
+    /// Drive upload rounds against the filesystem until the queue is
+    /// empty — what the production worker does on its thread.
+    fn drain_uploads(queue: &InMemoryJobQueue, dir: &Path) {
+        let store = FsObjectStore::new(dir);
+        let worker = QueueWorker::new(queue.clone(), JobKind::Upload);
+        while worker
+            .tick(|job| store.put(&job.key, &job.payload))
+            .unwrap()
+        {}
     }
 
     #[test]
     fn stores_instance_under_deterministic_key() {
         let dir = tempfile::tempdir().unwrap();
-        let intake = intake(dir.path());
+        let (intake, queue) = rig();
 
         let key = intake
             .store_instance(uids::IMPLICIT_VR_LITTLE_ENDIAN, &dataset_bytes())
             .unwrap();
 
         assert_eq!(key, "1.2.3.4.5/1.2.3.4.5.6/1.2.3.4.5.6.7.8.9.dcm");
+        // durably queued, not yet on disk
+        assert!(!dir.path().join(&key).exists());
+
+        drain_uploads(&queue, dir.path());
         let written = dir.path().join(&key);
         assert!(written.exists());
-
-        // stored file is a valid Part-10 file that parses back
         let bytes = std::fs::read(&written).unwrap();
         assert_eq!(&bytes[128..132], b"DICM");
     }
@@ -211,11 +244,12 @@ mod tests {
     #[test]
     fn stored_instance_is_deidentified() {
         let dir = tempfile::tempdir().unwrap();
-        let intake = intake(dir.path());
+        let (intake, queue) = rig();
 
         let key = intake
             .store_instance(uids::IMPLICIT_VR_LITTLE_ENDIAN, &dataset_bytes())
             .unwrap();
+        drain_uploads(&queue, dir.path());
 
         let stored = dicom_object::open_file(dir.path().join(&key)).unwrap();
         let patient_name = stored
@@ -230,8 +264,7 @@ mod tests {
 
     #[test]
     fn unknown_transfer_syntax_is_rejected() {
-        let dir = tempfile::tempdir().unwrap();
-        let intake = intake(dir.path());
+        let (intake, _queue) = rig();
 
         let err = intake
             .store_instance("9.9.9", &dataset_bytes())
@@ -241,8 +274,7 @@ mod tests {
 
     #[test]
     fn garbage_dataset_is_rejected() {
-        let dir = tempfile::tempdir().unwrap();
-        let intake = intake(dir.path());
+        let (intake, _queue) = rig();
 
         let err = intake
             .store_instance(uids::IMPLICIT_VR_LITTLE_ENDIAN, b"not a dicom dataset")
@@ -252,11 +284,11 @@ mod tests {
 
     #[test]
     fn policy_rejection_stops_the_store() {
-        let dir = tempfile::tempdir().unwrap();
+        let queue = InMemoryJobQueue::default();
         let intake = IntakeService::new(
-            crate::infra::store::FsObjectStore::new(dir.path()),
+            queue.clone(),
             InMemoryMappingStore::default(),
-            StaticFilter(crate::app::models::filter::FilterPolicy {
+            StaticFilter(filter::FilterPolicy {
                 // the fixture dataset is CT — MG-only policy rejects it
                 allow_modalities: vec![crate::app::models::modality::ModalityType::MG],
                 ..Default::default()
@@ -268,6 +300,7 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(err, IntakeError::Filtered(_)));
-        assert!(std::fs::read_dir(dir.path()).unwrap().next().is_none());
+        // nothing was queued
+        assert!(queue.claim(JobKind::Upload).unwrap().is_none());
     }
 }

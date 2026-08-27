@@ -11,8 +11,10 @@ use dicom_transfer_syntax_registry::TransferSyntaxIndex;
 use dicom_ul::association::client::ClientAssociationOptions;
 use dicom_ul::association::server::ServerAssociationOptions;
 use dicom_ul::pdu::{PDataValue, PDataValueType, Pdu, PresentationContextResultReason};
-use ferritin::app::ports::MappingStore;
+use ferritin::app::models::job::JobKind;
+use ferritin::app::ports::{MappingStore, ObjectStore};
 use ferritin::app::service::forward::{ForwardError, ForwardingService};
+use ferritin::app::service::worker::QueueWorker;
 use ferritin::app::{dicom::dimse, models::rules};
 use ferritin::config::DICOMServerConfig;
 use ferritin::infra::db::InMemoryMappingStore;
@@ -183,6 +185,7 @@ fn round_trip_restores_identity_at_the_destination() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let ferritin_addr = listener.local_addr().unwrap();
     let mappings = InMemoryMappingStore::default();
+    let queue = ferritin::infra::db::InMemoryJobQueue::default();
     let server = Server::new(
         DICOMServerConfig {
             facility_name: "test".to_string(),
@@ -190,7 +193,7 @@ fn round_trip_restores_identity_at_the_destination() {
             port: 0,
             ae_title: "TEST-SCP".to_string(),
         },
-        FsObjectStore::new(dir.path()),
+        queue.clone(),
         mappings.clone(),
         fixtures::StaticFilter::allow_all(),
         fixtures::StaticCallers(vec!["TEST-SCU@127.0.0.1".parse().unwrap()]),
@@ -236,7 +239,14 @@ fn round_trip_restores_identity_at_the_destination() {
     client.receive().unwrap(); // C-STORE-RSP
     client.send(&Pdu::ReleaseRQ).unwrap();
 
-    // intake stored the de-identified Part-10 file
+    // intake stored the de-identified Part-10 file via the upload
+    // worker draining the queue
+    let store = FsObjectStore::new(dir.path());
+    let worker = QueueWorker::new(queue, JobKind::Upload);
+    while worker
+        .tick(|job| store.put(&job.key, &job.payload))
+        .unwrap()
+    {}
     let stored_path = dir.path().join(format!(
         "{STUDY_INSTANCE_UID}/{SERIES_INSTANCE_UID}/{SOP_INSTANCE_UID}.dcm"
     ));

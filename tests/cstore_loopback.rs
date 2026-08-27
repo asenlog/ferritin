@@ -9,8 +9,11 @@ use dicom_transfer_syntax_registry::TransferSyntaxIndex;
 use dicom_ul::association::client::ClientAssociationOptions;
 use dicom_ul::pdu::{PDataValue, PDataValueType, Pdu};
 use ferritin::app::dicom::dimse;
+use ferritin::app::models::job::JobKind;
+use ferritin::app::ports::ObjectStore;
+use ferritin::app::service::worker::QueueWorker;
 use ferritin::config::DICOMServerConfig;
-use ferritin::infra::db::InMemoryMappingStore;
+use ferritin::infra::db::{InMemoryJobQueue, InMemoryMappingStore};
 use ferritin::infra::scp::Server;
 use ferritin::infra::store::FsObjectStore;
 use std::net::TcpListener;
@@ -78,9 +81,10 @@ fn c_store_round_trip_persists_instance() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
 
+    let queue = InMemoryJobQueue::default();
     let server = Server::new(
         test_config(),
-        FsObjectStore::new(dir.path()),
+        queue.clone(),
         InMemoryMappingStore::default(),
         fixtures::StaticFilter::allow_all(),
         test_callers(),
@@ -141,6 +145,14 @@ fn c_store_round_trip_persists_instance() {
     }
     client.send(&Pdu::ReleaseRQ).unwrap();
 
+    // intake queued the upload durably; the worker drains it
+    let store = FsObjectStore::new(dir.path());
+    let worker = QueueWorker::new(queue, JobKind::Upload);
+    while worker
+        .tick(|job| store.put(&job.key, &job.payload))
+        .unwrap()
+    {}
+
     // the instance landed under the deterministic key
     let stored = dir.path().join(format!(
         "{STUDY_INSTANCE_UID}/{SERIES_INSTANCE_UID}/{SOP_INSTANCE_UID}.dcm"
@@ -154,13 +166,12 @@ fn c_store_round_trip_persists_instance() {
 
 #[test]
 fn unknown_calling_ae_is_rejected() {
-    let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
 
     let server = Server::new(
         test_config(),
-        FsObjectStore::new(dir.path()),
+        InMemoryJobQueue::default(),
         InMemoryMappingStore::default(),
         fixtures::StaticFilter::allow_all(),
         test_callers(),
@@ -180,13 +191,12 @@ fn unknown_calling_ae_is_rejected() {
 
 #[test]
 fn wrong_called_ae_is_rejected() {
-    let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
 
     let server = Server::new(
         test_config(),
-        FsObjectStore::new(dir.path()),
+        InMemoryJobQueue::default(),
         InMemoryMappingStore::default(),
         fixtures::StaticFilter::allow_all(),
         test_callers(),
