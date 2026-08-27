@@ -5,11 +5,11 @@
 //! A failure here leaves the queue message in place (the listener
 //! deletes only on success), so results are never lost silently.
 
+use crate::dicom::anonymize::deanonymize;
 use crate::domain::rules;
 use crate::ports::MappingStore;
 use crate::ports::RuleDirectory;
 use crate::scu::ScuClient;
-use crate::service::anonymize::deanonymize;
 use dicom_dictionary_std::tags;
 use dicom_object::InMemDicomObject;
 

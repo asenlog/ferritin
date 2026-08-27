@@ -7,7 +7,7 @@
 //! domain vocabulary in `domain`; none of them knows this module exists.
 
 use crate::config::DICOMServerConfig;
-use crate::dimse;
+use crate::dicom::dimse;
 use crate::domain::auth::AuthorizedCaller;
 use crate::ports::{CallerDirectory, MappingStore, ObjectStore};
 use crate::service::intake::{IntakeError, IntakeService};

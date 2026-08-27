@@ -6,9 +6,9 @@
 //! Knows nothing about sockets, PDUs, or DIMSE statuses — the SCP
 //! adapter maps `IntakeError` onto wire statuses.
 
+use crate::dicom::anonymize;
 use crate::ports::MappingStore;
 use crate::ports::ObjectStore;
-use crate::service::anonymize;
 use dicom_dictionary_std::tags;
 use dicom_object::{FileMetaTableBuilder, InMemDicomObject};
 use dicom_transfer_syntax_registry::{TransferSyntaxIndex, TransferSyntaxRegistry};

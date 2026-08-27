@@ -23,15 +23,19 @@
   module (synapse's `app/ports` analog); signatures over domain
   types, no bodies
 - `crates/ferritin-core/src/service/` — orchestrators (`intake`,
-  `anonymize`, `forward`) composing domain ports only; no concrete
-  infrastructure types
+  `forward`) composing domain ports only; no concrete infrastructure
+  types. Services here are always DI structs; pure DICOM logic lives
+  in `dicom/`, not here
+- `crates/ferritin-core/src/dicom/` — pure DICOM logic, functions
+  only (`dimse` command sets, `anonymize` tag transforms); no
+  sockets, no ports
 - `crates/ferritin-core/src/db/` — database layer, one repository
   module per table/aggregate implementing its port for `PgStore`;
   a new table gets its own module. Row models and row ↔ domain
   conversions live here, never in `domain/`
 - `crates/ferritin-core/tests/fixtures/` — static port adapters for
   integration tests (Null Objects over `Vec`); no logic, ever
-- `crates/ferritin-core/src/{scp,scu,dimse,store}.rs` — edge
+- `crates/ferritin-core/src/{scp,scu,store}.rs` — edge
   adapters: DICOM network I/O and the filesystem object store
 - `crates/ferritin-cloud/` — adapters to external systems, one module
   per system (`aws::s3`, `aws::sqs`)

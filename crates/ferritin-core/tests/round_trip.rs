@@ -18,7 +18,7 @@ use ferritin_core::scp::Server;
 use ferritin_core::scu::ScuClient;
 use ferritin_core::service::forward::{ForwardError, ForwardingService};
 use ferritin_core::store::FsObjectStore;
-use ferritin_core::{dimse, domain::rules};
+use ferritin_core::{dicom::dimse, domain::rules};
 use std::collections::HashMap;
 use std::net::{SocketAddr, TcpListener};
 use std::sync::{Arc, Mutex};

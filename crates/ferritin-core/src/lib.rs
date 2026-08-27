@@ -1,6 +1,6 @@
 pub mod config;
 pub mod db;
-pub mod dimse;
+pub mod dicom;
 pub mod domain;
 pub mod ports;
 pub mod scp;

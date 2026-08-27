@@ -5,7 +5,7 @@
 //! response. Routing decisions live in `rules`, the pipeline in
 //! `forward`; neither knows this module exists.
 
-use crate::dimse;
+use crate::dicom::dimse;
 use crate::domain::rules::Destination;
 use anyhow::{bail, Context};
 use dicom_dictionary_std::tags;

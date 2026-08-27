@@ -10,7 +10,7 @@ use dicom_ul::association::client::ClientAssociationOptions;
 use dicom_ul::pdu::{PDataValue, PDataValueType, Pdu};
 use ferritin_core::config::DICOMServerConfig;
 use ferritin_core::db::InMemoryMappingStore;
-use ferritin_core::dimse;
+use ferritin_core::dicom::dimse;
 use ferritin_core::scp::Server;
 use ferritin_core::store::FsObjectStore;
 use std::net::TcpListener;
