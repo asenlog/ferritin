@@ -281,7 +281,8 @@ fn forward_rejects_garbage_unknown_studies_and_unrouted() {
     mappings
         .mapping_for(STUDY_INSTANCE_UID, "PAT-1", "Doe^John")
         .unwrap();
-    let forwarding = ForwardingService::new(mappings, vec![], ScuClient::new("FERRITIN"));
+    let no_rules: Vec<rules::ForwardingRule> = Vec::new();
+    let forwarding = ForwardingService::new(mappings, no_rules, ScuClient::new("FERRITIN"));
     assert!(matches!(
         forwarding.forward_result(&part10(STUDY_INSTANCE_UID)),
         Err(ForwardError::NoRoute { .. })

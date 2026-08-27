@@ -51,16 +51,14 @@ The boundary between env and database is deliberate:
 - **Env — deployment config.** This node's own identity and
   infrastructure, set once per deployment: `FACILITY_NAME`,
   `LISTEN_HOST` / `LISTEN_PORT` / `LISTEN_AE_TITLE`, `S3_BUCKET`,
-  `SQS_QUEUE_URL`, `STORAGE_ROOT`, `DATABASE_URL`, `DICOM_RULES`,
-  `STORAGE_BACKEND` (`fs` for local development, `s3` to persist
-  studies in the bucket).
+  `SQS_QUEUE_URL`, `STORAGE_ROOT`, `DATABASE_URL`, `STORAGE_BACKEND`
+  (`fs` for local development, `s3` to persist studies in the bucket).
 - **Database — user-managed domain data.** Everything a frontend
-  administers at runtime. Today: the `authorized_callers` table
-  (remote nodes allowed to push, as AE-title + CIDR rows) and the
-  `study_mappings` de-identification table. The SCP reads
-  `authorized_callers` fresh per association, so edits take effect
-  without a restart. Forwarding rules (`DICOM_RULES`) and destination
-  nodes move here when the filtering/forwarding work lands.
+  administers at runtime: `authorized_callers` (remote nodes allowed
+  to push, as AE-title + CIDR rows), `forwarding_rules` (modality +
+  SOP class → destination AE), and the `study_mappings`
+  de-identification table. Callers are read fresh per association and
+  rules fresh per result, so edits take effect without a restart.
 
 Migrations live in `migrations/` at the workspace root (sqlx,
 embedded in the binary at compile time) and run automatically at

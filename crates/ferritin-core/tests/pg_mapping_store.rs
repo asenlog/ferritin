@@ -5,6 +5,7 @@
 
 use ferritin_core::auth::CallerDirectory;
 use ferritin_core::db::{MappingStore, PgStore};
+use ferritin_core::rules::RuleDirectory;
 use testcontainers::runners::SyncRunner;
 use testcontainers_modules::postgres::Postgres;
 
@@ -86,4 +87,36 @@ fn pg_caller_directory_round_trip() {
 
     // ...and the malformed row is skipped instead of failing the load
     assert!(!callers.iter().any(|c| c.ae_title == format!("BAD-{ae_title}")));
+}
+
+#[test]
+fn pg_rule_directory_round_trip() {
+    let (_container, store, runtime, pool) = rig();
+
+    // insert directly, as the frontend (or a migration) would
+    runtime.block_on(async {
+        sqlx::query(
+            "INSERT INTO forwarding_rules (modality, sop_class_uid, ae_title, host, port)
+             VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind("MG")
+        .bind("1.2.840.10008.5.1.4.1.1.13.1.3")
+        .bind("PACS")
+        .bind("192.168.1.10")
+        .bind(104)
+        .execute(&pool)
+        .await
+        .unwrap();
+    });
+
+    let rules = store.forwarding_rules().unwrap();
+
+    let rule = rules
+        .iter()
+        .find(|r| r.sop_class_uid == "1.2.840.10008.5.1.4.1.1.13.1.3")
+        .expect("inserted rule must be readable");
+    assert_eq!(rule.modality, ferritin_core::models::ModalityType::MG);
+    assert_eq!(rule.destination.ae_title, "PACS");
+    assert_eq!(rule.destination.host, "192.168.1.10");
+    assert_eq!(rule.destination.port, 104);
 }

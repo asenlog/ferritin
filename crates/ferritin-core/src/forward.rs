@@ -7,14 +7,14 @@
 
 use crate::anonymize::deanonymize;
 use crate::db::MappingStore;
-use crate::rules::{self, ForwardingRule};
+use crate::rules::{self, RuleDirectory};
 use crate::scu::ScuClient;
 use dicom_dictionary_std::tags;
 use dicom_object::InMemDicomObject;
 
-pub struct ForwardingService<M> {
+pub struct ForwardingService<M, R> {
     mappings: M,
-    rules: Vec<ForwardingRule>,
+    rules: R,
     scu: ScuClient,
 }
 
@@ -32,12 +32,15 @@ pub enum ForwardError {
     #[error("mapping lookup failed: {0}")]
     Mapping(String),
 
+    #[error("failed to load forwarding rules: {0}")]
+    Rules(String),
+
     #[error("forward to destination failed: {0}")]
     Forward(String),
 }
 
-impl<M: MappingStore> ForwardingService<M> {
-    pub fn new(mappings: M, rules: Vec<ForwardingRule>, scu: ScuClient) -> Self {
+impl<M: MappingStore, R: RuleDirectory> ForwardingService<M, R> {
+    pub fn new(mappings: M, rules: R, scu: ScuClient) -> Self {
         Self {
             mappings,
             rules,
@@ -63,7 +66,13 @@ impl<M: MappingStore> ForwardingService<M> {
         let modality = text_of(&obj, tags::MODALITY).unwrap_or_default();
         let sop_class_uid = text_of(&obj, tags::SOP_CLASS_UID)
             .ok_or_else(|| ForwardError::MalformedResult("missing SOP Class UID".into()))?;
-        let dest = rules::resolve(&self.rules, &modality, &sop_class_uid).ok_or_else(|| {
+        // rules are read fresh per result so directory changes (e.g.
+        // from the frontend) apply without a restart
+        let rules = self
+            .rules
+            .forwarding_rules()
+            .map_err(|e| ForwardError::Rules(e.to_string()))?;
+        let dest = rules::resolve(&rules, &modality, &sop_class_uid).ok_or_else(|| {
             ForwardError::NoRoute {
                 modality: modality.clone(),
                 sop_class_uid: sop_class_uid.clone(),

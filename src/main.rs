@@ -3,7 +3,6 @@ use crate::config::{Config, StorageBackend};
 use ferritin_cloud::aws::s3::S3ObjectStore;
 use ferritin_cloud::aws::sqs::SqsResultListener;
 use ferritin_core::forward::ForwardingService;
-use ferritin_core::rules::ForwardingRule;
 use ferritin_core::scu::ScuClient;
 use ferritin_core::{db::PgStore, scp, store::FsObjectStore};
 
@@ -34,33 +33,19 @@ fn main() -> anyhow::Result<()> {
 /// result, and forward it to its destination AE. Runs on its own
 /// thread; if it dies the SCP keeps serving and the error is logged
 /// (results stay on the queue for the next process run).
-fn spawn_results_listener(cfg: &Config, mappings: PgStore) {
-    let rules: Vec<ForwardingRule> = match cfg
-        .rules
-        .dicom_rules
-        .iter()
-        .map(|rule| rule.parse::<ForwardingRule>().map_err(|e| anyhow::anyhow!(e)))
-        .collect::<Result<_, _>>()
-    {
-        Ok(rules) => rules,
-        Err(e) => {
-            tracing::error!("invalid DICOM_RULES, results listener disabled: {e:#}");
-            return;
-        }
-    };
-
+fn spawn_results_listener(cfg: &Config, db: PgStore) {
     let queue_url = cfg.aws.sqs_queue_url.clone();
     let scu = ScuClient::new(cfg.dicom_server.ae_title.clone());
     std::thread::spawn(move || {
-        let forwarding = ForwardingService::new(mappings, rules, scu);
-        let result = SqsResultListener::connect(&queue_url)
-            .and_then(|listener| {
-                listener.run(move |result| {
-                    forwarding
-                        .forward_result(&result.bytes)
-                        .map_err(anyhow::Error::from)
-                })
-            });
+        // one store, three ports: mappings + callers + rules
+        let forwarding = ForwardingService::new(db.clone(), db, scu);
+        let result = SqsResultListener::connect(&queue_url).and_then(|listener| {
+            listener.run(move |result| {
+                forwarding
+                    .forward_result(&result.bytes)
+                    .map_err(anyhow::Error::from)
+            })
+        });
         if let Err(e) = result {
             tracing::error!("results listener stopped: {e:#}");
         }

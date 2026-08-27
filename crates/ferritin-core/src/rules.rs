@@ -77,6 +77,20 @@ pub fn resolve(
         .map(|rule| rule.destination.clone())
 }
 
+/// Where the forwarding-rule list is kept. The Postgres adapter
+/// serves the server; the `Vec` impl serves tests and fixtures.
+pub trait RuleDirectory {
+    /// Snapshot of the current rules. Read fresh per result so
+    /// changes take effect without a restart.
+    fn forwarding_rules(&self) -> anyhow::Result<Vec<ForwardingRule>>;
+}
+
+impl RuleDirectory for Vec<ForwardingRule> {
+    fn forwarding_rules(&self) -> anyhow::Result<Vec<ForwardingRule>> {
+        Ok(self.clone())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
